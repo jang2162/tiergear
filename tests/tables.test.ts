@@ -43,6 +43,15 @@ describe('overrides', () => {
     expect(merged?.claude.effort['opus-next']).toEqual({ trivial: null, quick: null, standard: null, deep: 'high', max: null });
   });
 
+  it('rejects a model name that is not a plain id, since it ends up in a shell command', () => {
+    expect(mergeTables(DEFAULT_TABLES, { claude: { models: { standard: 'sonnet; touch /tmp/pwned #' } } })).toBeNull();
+    expect(mergeTables(DEFAULT_TABLES, { claude: { models: { standard: '$(id)' } } })).toBeNull();
+    expect(mergeTables(DEFAULT_TABLES, { codex: { models: { deep: 'gpt "x"' } } })).toBeNull();
+    for (const model of ['opus[1m]', 'claude-opus-5-5', 'gpt-5.6-terra', 'org/model:v2']) {
+      expect(mergeTables(DEFAULT_TABLES, { claude: { models: { deep: model } } })?.claude.models.deep).toBe(model);
+    }
+  });
+
   it('rejects the whole file on any bad value', () => {
     expect(mergeTables(DEFAULT_TABLES, { claude: { models: { huge: 'opus' } } })).toBeNull();
     expect(mergeTables(DEFAULT_TABLES, { claude: { effort: { opus: { deep: 'extreme' } } } })).toBeNull();

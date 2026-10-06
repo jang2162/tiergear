@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { LaunchPlan } from '../src/cli/launch.js';
 import { OrcaError, type OrcaExec } from '../src/cli/orca.js';
-import { spawnWorker, type SpawnParams } from '../src/cli/spawn.js';
+import { briefProblem, spawnWorker, type SpawnParams } from '../src/cli/spawn.js';
 
 const plan: LaunchPlan = {
   tier: 'deep', confidence: 0.8, target: { model: 'opus', effort: 'xhigh' },
@@ -131,5 +131,19 @@ describe('spawnWorker with a bound run', () => {
     const { exec, calls } = fakeOrca([], { run: 'run_1' });
     await run(exec);
     expect(calls.some((c) => c.args[0] === 'terminal')).toBe(false);
+  });
+});
+
+describe('briefProblem', () => {
+  it('refuses what a worker prompt would run instead of read', () => {
+    expect(briefProblem('!echo tg > /tmp/tg-probe')).toContain('!');
+    expect(briefProblem('  /review the diff')).toContain('/');
+    expect(briefProblem('fix it\u001b[2J')).toContain('control');
+    expect(briefProblem('fix it\rnow')).toContain('control');
+  });
+
+  it('accepts ordinary text, line breaks and tabs', () => {
+    expect(briefProblem('fix "the" bug\nthen run $HOME/test\tnow')).toBeNull();
+    expect(briefProblem('README의 /path 를 읽어줘')).toBeNull();
   });
 });

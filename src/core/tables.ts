@@ -47,6 +47,9 @@ export function firstTarget(tables: Tables, harness: Harness, tier: Tier): Targe
   return { model, effort: effortFor(tables, harness, model, tier) };
 }
 
+// A model id ends up in a launch command a shell reads, so only id characters pass (brackets as in `opus[1m]`).
+const MODEL_ID = /^[A-Za-z0-9][A-Za-z0-9._:/[\]-]*$/;
+
 function isObject(value: unknown): value is Record<string, unknown> {
   return value !== null && typeof value === 'object' && !Array.isArray(value);
 }
@@ -61,7 +64,7 @@ export function mergeTables(base: Tables, override: unknown): Tables | null {
     if (models !== undefined) {
       if (!isObject(models)) return null;
       for (const [tier, model] of Object.entries(models)) {
-        if (!isTier(tier) || typeof model !== 'string' || !model) return null;
+        if (!isTier(tier) || typeof model !== 'string' || !MODEL_ID.test(model)) return null;
         target.models[tier] = model;
       }
     }

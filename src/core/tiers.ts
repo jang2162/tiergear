@@ -57,10 +57,10 @@ export function maxTier(a: Tier, b: Tier | null): Tier {
 }
 
 export function launchCommand(harness: Harness, target: Target): string {
+  // Tables admit only id characters, so quoting is needed just to keep a shell from globbing `[1m]`.
+  const model = /^[A-Za-z0-9._:/-]+$/.test(target.model) ? target.model : `'${target.model}'`;
   if (harness === 'claude') {
-    return target.effort ? `claude --model ${target.model} --effort ${target.effort}` : `claude --model ${target.model}`;
+    return target.effort ? `claude --model ${model} --effort ${target.effort}` : `claude --model ${model}`;
   }
-  return target.effort
-    ? `codex --model ${target.model} -c model_reasoning_effort="${target.effort}"`
-    : `codex --model ${target.model}`;
+  return target.effort ? `codex --model ${model} -c model_reasoning_effort="${target.effort}"` : `codex --model ${model}`;
 }

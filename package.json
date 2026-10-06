@@ -4,8 +4,12 @@
   "description": "Let a decision model pick the model and reasoning effort for Claude Code sessions and Orca workers",
   "type": "module",
   "license": "MIT",
-  "engines": { "node": ">=20" },
-  "bin": { "tiergear": "dist/cli/bin.js" },
+  "engines": {
+    "node": ">=20"
+  },
+  "bin": {
+    "tiergear": "dist/cli/bin.js"
+  },
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "test": "vitest run",
@@ -16,6 +20,7 @@
     "@types/node": "^22.10.2",
     "tsx": "^4.19.2",
     "typescript": "^5.7.2",
-    "vitest": "^2.1.8"
+    "vite": "^8.3.2",
+    "vitest": "^5.0.3"
   }
 }

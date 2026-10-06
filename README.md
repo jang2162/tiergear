@@ -63,6 +63,9 @@ All three judges use TypeSafe's `<baseUrl>/v1/systemone` contract. The default i
 - jev needs a key and sends data to TypeSafe's servers.
 - laya runs locally with `ollaya run laya`.
 - kev points at a server you run locally or on Modal (change the address with `judgeBaseUrl`).
+- A judge address must be `https`, or `http` to this machine (`localhost`, `127.0.0.1`, `[::1]`), since prompts travel in the request. Any other address is refused and the turn goes on untouched.
+- A preset's key goes only to that preset's own address. Point `judgeBaseUrl` (or the CLI's `--judge-url`) elsewhere and set the key for it explicitly with `judgeApiKey` (CLI: `TIERGEAR_JUDGE_API_KEY`); `TYPESAFE_API_KEY` and the like are not sent there.
+- A key that a repository's `.claude/settings.json` supplies (in `env`) is ignored, so a cloned repo can't route your prompts to its own account. Keys in your user settings, `.claude/settings.local.json` or your shell are used.
 - After 3 judge failures in a row, the session skips the judge for 5 minutes and keeps its current state instead of falling back to the tables.
 
 ## Tables A and B
@@ -102,7 +105,7 @@ Put only the cells you want to change in `~/.config/tiergear/tables.json`; they 
 { "claude": { "effort": { "opus": { "deep": "max" } } } }
 ```
 
-Model cells go under `models`, as in `{"claude":{"models":{"deep":"opus"}}}`. Effort values are low, medium, high, xhigh, max, or `null`. If any value or the JSON itself is invalid, **the whole file is ignored** and the default tables are used (this is noted in the hook log). Hooks read the file once, the first time it's needed after session start, so open a new session after editing it.
+Model cells go under `models`, as in `{"claude":{"models":{"deep":"opus"}}}`. A model must be a plain id (letters, digits, `.`, `_`, `-`, `:`, `/` and brackets as in `opus[1m]`), since it ends up in a launch command a shell reads. Effort values are low, medium, high, xhigh, max, or `null`. If any value or the JSON itself is invalid, **the whole file is ignored** and the default tables are used (this is noted in the hook log). Hooks read the file once, the first time it's needed after session start, so open a new session after editing it.
 
 ### Haiku for trivial (bypass-permissions users)
 
@@ -132,9 +135,9 @@ Change these in `/config` (plugin options).
 | Option | Default | Description |
 | --- | --- | --- |
 | `judge` | `jev` | Judge preset: one of jev, laya, kev (shown as a list in `/config`). An unknown value falls back to jev and is noted once in the hook log |
-| `judgeBaseUrl` | preset | Leave empty for the preset's address |
+| `judgeBaseUrl` | preset | Leave empty for the preset's address. Must be https, or http to localhost |
 | `judgeModel` | preset | Leave empty for the preset's model |
-| `judgeApiKey` | preset env var | Leave empty to use TYPESAFE_API_KEY, OLLAYA_API_KEY, or KEV_API_KEY (sensitive) |
+| `judgeApiKey` | preset env var | Leave empty to use TYPESAFE_API_KEY, OLLAYA_API_KEY, or KEV_API_KEY, which only go to the preset's own address (sensitive) |
 | `switchModelMidSession` | `false` | Also change the model after the first turn (breaks the prompt cache). Off: only effort changes |
 | `minUpgradeConfidence` | `0.5` | Minimum confidence to raise the tier |
 | `minDowngradeConfidence` | `0.85` | Minimum confidence for a turn to count toward lowering |
@@ -178,7 +181,7 @@ tiergear stats [days]
 ```
 
 - `launch`: judges the brief and prints the command to run (e.g. `claude --model opus --effort xhigh`). With Claude, `--worktree` writes a floor for that path. The path is stored as an absolute real path (symlinks resolved), so a relative path still works for a session opened in that folder. With `--agent codex`, floors are Claude-only, so none is written and a one-line note is printed instead.
-- `orca-spawn`: creates an Orca worktree, writes the floor, and starts the agent there with the judged model and effort. Prints the result as JSON. `--base-branch` picks the ref the worktree starts from; without it Orca uses the repo's default base, which may be a remote branch behind your local one.
+- `orca-spawn`: creates an Orca worktree, writes the floor, and starts the agent there with the judged model and effort. Prints the result as JSON. `--base-branch` picks the ref the worktree starts from; without it Orca uses the repo's default base, which may be a remote branch behind your local one. A brief that starts with `!` or `/` (which the agent's prompt would run as a shell or slash command) or holds control characters other than line breaks and tabs is refused before the judge is asked.
   - **Inside an orchestration Run** (run from the coordinator terminal after `orca orchestration run-create`): starts the agent with `orca orchestration worker-start`, so the worker gets Orca's lifecycle preamble and reports `worker_done` to the Run. The JSON includes `dispatch` (`runId`, `taskId`, `dispatchId`, `handle`). A failed `worker-start` exits non-zero with Orca's error; don't rerun it blindly, since Orca may have left resources behind.
   - **Without a Run**: creates a terminal, waits for the agent, then types the brief as is (no preamble, `dispatch` is `null`). If Claude asks whether to trust the folder, **`orca-spawn` does not approve it for you.** Approve it yourself in Orca within 120 seconds. If the agent isn't ready, the brief is **not sent** (exit code 1) and a fallback shell may be left in the worktree.
   - The floor is written before the agent's first prompt in both cases. Without it, the first turn would be judged on Orca's preamble, which usually gives low confidence.
@@ -193,7 +196,7 @@ The CLI can't read plugin options, so it looks up settings from flags, then envi
 | `TIERGEAR_JUDGE` | Judge name (default jev) |
 | `TIERGEAR_JUDGE_URL` | Judge address |
 | `TIERGEAR_JUDGE_MODEL` | Judge model |
-| `TIERGEAR_JUDGE_API_KEY` | Key (falls back to the preset's key env var) |
+| `TIERGEAR_JUDGE_API_KEY` | Key (falls back to the preset's key env var, only for the preset's own address) |
 
 ## Where things are stored
 
@@ -202,7 +205,7 @@ The CLI can't read plugin options, so it looks up settings from flags, then envi
 | Tables | `~/.config/tiergear/tables.json` |
 | Floors (valid 24 hours) | `~/.local/state/tiergear/floors/<fnv1a(worktree)>.json` |
 | Decision log (1000 lines per file) | `~/.local/state/tiergear/decisions/<name>.jsonl` |
-| Session records (kept 7 days, newest 200) | Plugin `$.store` under `session:<id>` (the first prompt is truncated to 2000 characters) |
+| Session records (kept 7 days, newest 200) | Plugin `$.store` under `session:<id>` (the first prompt is truncated to 2000 characters, and dropped once a session is pinned) |
 
 Raw prompt text is never written to the logs.
 

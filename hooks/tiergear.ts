@@ -21,7 +21,7 @@ import {
 import { EMPTY_TRACKER, failureSignature, recordFailure, recordSuccess, type FailureTracker } from '../src/core/failures.js';
 import { floorPath, parseFloor, type FloorRecord } from '../src/core/floor.js';
 import type { AskResult, Judge, Verdict } from '../src/core/judge.js';
-import { JUDGE_PRESETS, isJudgeName } from '../src/core/judges/presets.js';
+import { JUDGE_PRESETS, isAllowedJudgeUrl, isJudgeName, presetKeyApplies } from '../src/core/judges/presets.js';
 import { createSystemOneJudge } from '../src/core/judges/systemone.js';
 import { appendLogLine, decisionLogPath, recentDecisionLines, type LogEntry } from '../src/core/log.js';
 import { firstTurnState, nextTurnState, type ContextMessage } from '../src/core/state.js';
@@ -50,7 +50,7 @@ export interface HookHost {
   };
   fs: { read(path: string): Promise<string>; write(path: string, text: string): Promise<void> };
   env: { get(name: string): Promise<string | undefined> };
-  settings: { read(): Promise<Readonly<Record<string, unknown>>> };
+  settings: { read(args?: { source: 'user' | 'project' | 'local' }): Promise<Readonly<Record<string, unknown>>> };
   http: {
     fetch(
       url: string,
@@ -93,17 +93,21 @@ export function stepOverride<T extends StepLike>(applied: Applied | null, step: 
   return next as T;
 }
 
+function settingsEnv(settings: Readonly<Record<string, unknown>>, name: string): string | undefined {
+  const env = settings['env'];
+  const value = env && typeof env === 'object' ? (env as Record<string, unknown>)[name] : undefined;
+  return typeof value === 'string' && value ? value : undefined;
+}
+
 async function resolveApiKey(host: HookHost, config: Config): Promise<string | undefined> {
   if (config.judgeApiKey) return config.judgeApiKey;
-  const keyEnv = JUDGE_PRESETS[config.judge].keyEnv;
-  const fromEnv = await host.env.get(keyEnv);
-  if (fromEnv) return fromEnv;
-  const env = (await host.settings.read())['env'];
-  if (env && typeof env === 'object') {
-    const value = (env as Record<string, unknown>)[keyEnv];
-    if (typeof value === 'string' && value) return value;
-  }
-  return undefined;
+  const preset = JUDGE_PRESETS[config.judge];
+  if (!presetKeyApplies(preset, config.judgeBaseUrl)) return undefined;
+  // A cloned repository's .claude/settings.json can set env too; its key would send prompts to someone else's account.
+  const fromProject = settingsEnv(await host.settings.read({ source: 'project' }), preset.keyEnv);
+  const fromEnv = await host.env.get(preset.keyEnv);
+  if (fromEnv && fromEnv !== fromProject) return fromEnv;
+  return settingsEnv(await host.settings.read({ source: 'user' }), preset.keyEnv) ?? settingsEnv(await host.settings.read({ source: 'local' }), preset.keyEnv);
 }
 
 export function toContext(message: SessionMessageLike): ContextMessage {
@@ -252,6 +256,10 @@ export function createTiergear(options: Readonly<Record<string, unknown>>) {
       };
       // The state is built only when the judge can be asked: a missing required key fails before the session is read.
       const ask = async (state: () => Promise<object>, withStuck: boolean, timeoutMs: number) => {
+        if (!isAllowedJudgeUrl(config.judgeBaseUrl)) {
+          noteOutcome({ ok: false, reason: `judge URL ${config.judgeBaseUrl} must be https, or http to localhost` });
+          return;
+        }
         const apiKey = await resolveApiKey(host, config);
         if (JUDGE_PRESETS[config.judge].keyRequired && !apiKey) {
           noteOutcome({ ok: false, reason: `no API key for ${config.judge}` });
@@ -286,7 +294,8 @@ export function createTiergear(options: Readonly<Record<string, unknown>>) {
         if (decision.change === 'up') mem.failures = EMPTY_TRACKER;
       }
 
-      const saved: SessionRecord = { ...decision.record, updatedAt: now };
+      // A pinned session never asks the judge again, so its first prompt has no use left.
+      const saved: SessionRecord = { ...decision.record, ...(decision.record.pinned ? { firstPrompt: '' } : {}), updatedAt: now };
       await host.store.set(key, saved);
       mem.applied = saved.applied;
       // Pruned after the save, so the cap counts this session's record as the newest.
@@ -332,7 +341,7 @@ export function createTiergear(options: Readonly<Record<string, unknown>>) {
       const record = parseRecord(await host.store.get(key)) ?? newRecord('', now);
       if (record.pinned) return;
       host.ui.log('[tiergear] manual model/effort change — routing paused for this session');
-      await host.store.set(key, { ...record, pinned: true, applied: null, updatedAt: now });
+      await host.store.set(key, { ...record, pinned: true, applied: null, firstPrompt: '', updatedAt: now });
     } catch (error) {
       host.ui.log(`[tiergear] pause not saved: ${errorText(error)}`);
     }
@@ -408,7 +417,7 @@ function hostOf($: EngineInterface): HookHost {
         return undefined;
       },
     },
-    settings: { read: () => $.settings.read() },
+    settings: { read: (args) => $.settings.read(args) },
     http: { fetch: (url, init) => $.http.fetch(url, init) },
     clock: { now: () => $.clock.now(), sleep: (ms) => $.clock.sleep(ms) },
     ui: { status: (t) => $.ui.status(t), log: (t) => $.ui.log(t), refresh: () => $.ui.invalidate('ui.render') },

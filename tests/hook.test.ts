@@ -7,7 +7,9 @@ import { tablesPath } from '../src/core/tables.js';
 
 type Reply = { tier?: [string, number]; stuck?: number } | 'fail' | 'down';
 
-function fakeHost(replies: Reply[], files: Record<string, string> = {}, env: Record<string, string> = { TYPESAFE_API_KEY: 'k' }) {
+type SettingsBySource = Partial<Record<'user' | 'project' | 'local', Record<string, unknown>>>;
+
+function fakeHost(replies: Reply[], files: Record<string, string> = {}, env: Record<string, string> = { TYPESAFE_API_KEY: 'k' }, settings: SettingsBySource = {}) {
   const store = new Map<string, unknown>();
   const requests: { url: string; headers: Record<string, string>; body: string }[] = [];
   const statuses: (string | undefined)[] = [];
@@ -37,7 +39,10 @@ function fakeHost(replies: Reply[], files: Record<string, string> = {}, env: Rec
       write: async (p, t) => void (files[p] = t),
     },
     env: { get: async (n) => (n === 'HOME' ? '/home/u' : env[n]) },
-    settings: { read: async () => ({}) },
+    settings: {
+      read: async (args?: { source?: string }) =>
+        args?.source ? (settings[args.source as keyof SettingsBySource] ?? {}) : { ...settings.user, ...settings.project, ...settings.local },
+    },
     http: {
       fetch: async (url, init) => {
         requests.push({ url, headers: init?.headers ?? {}, body: init?.body ?? '' });
@@ -308,6 +313,47 @@ describe('judge context', () => {
   });
 });
 
+describe('judge key and address', () => {
+  it("does not send the preset's key to another address", async () => {
+    const { host, requests, logs } = fakeHost([{ tier: ['deep', 0.8] }]);
+    await createTiergear({ judgeBaseUrl: 'https://judge.example' }).promptSubmit(host, typed('refactor'));
+    expect(requests).toHaveLength(0);
+    expect(logs.some((l) => l.includes('no API key for jev'))).toBe(true);
+  });
+
+  it('sends an explicitly set key to any https address', async () => {
+    const { host, requests } = fakeHost([{ tier: ['deep', 0.8] }]);
+    await createTiergear({ judgeBaseUrl: 'https://judge.example', judgeApiKey: 'mine' }).promptSubmit(host, typed('refactor'));
+    expect(requests[0]!.headers['authorization']).toBe('Bearer mine');
+  });
+
+  it('refuses plain http to another machine', async () => {
+    const { host, requests, logs } = fakeHost([{ tier: ['deep', 0.8] }], {}, {});
+    await createTiergear({ judge: 'kev', judgeBaseUrl: 'http://gpu-box:8009' }).promptSubmit(host, typed('refactor'));
+    expect(requests).toHaveLength(0);
+    expect(logs.some((l) => l.includes('https'))).toBe(true);
+  });
+
+  it("ignores a key the repository's project settings supply, in settings or in the environment", async () => {
+    const project = { env: { TYPESAFE_API_KEY: 'theirs' } };
+    const fromEnv = fakeHost([{ tier: ['deep', 0.8] }], {}, { TYPESAFE_API_KEY: 'theirs' }, { project });
+    await createTiergear({}).promptSubmit(fromEnv.host, typed('refactor'));
+    expect(fromEnv.requests).toHaveLength(0);
+    const fromSettings = fakeHost([{ tier: ['deep', 0.8] }], {}, {}, { project });
+    await createTiergear({}).promptSubmit(fromSettings.host, typed('refactor'));
+    expect(fromSettings.requests).toHaveLength(0);
+  });
+
+  it('takes a key from user or local settings', async () => {
+    const user = fakeHost([{ tier: ['deep', 0.8] }], {}, {}, { user: { env: { TYPESAFE_API_KEY: 'mine' } } });
+    await createTiergear({}).promptSubmit(user.host, typed('refactor'));
+    expect(user.requests[0]!.headers['authorization']).toBe('Bearer mine');
+    const local = fakeHost([{ tier: ['deep', 0.8] }], {}, { TYPESAFE_API_KEY: 'mine' }, { local: { env: { TYPESAFE_API_KEY: 'mine' } } });
+    await createTiergear({}).promptSubmit(local.host, typed('refactor'));
+    expect(local.requests[0]!.headers['authorization']).toBe('Bearer mine');
+  });
+});
+
 describe('recent decisions', () => {
   it('logs the tier the judge proposed, even when it is not applied', async () => {
     const { host, files } = fakeHost([{ tier: ['deep', 0.3] }]);
@@ -343,6 +389,21 @@ describe('recent decisions', () => {
 });
 
 describe('user control wins (R18)', () => {
+  it('keeps no first prompt for a pinned session, which never asks the judge again', async () => {
+    const pinned = fakeHost([{ tier: ['deep', 0.8] }]);
+    const a = createTiergear({});
+    await a.promptSubmit(pinned.host, typed('refactor the parser'));
+    await a.promptSubmit(pinned.host, typed('!pin keep going'));
+    expect(pinned.store.get('session:s1')).toMatchObject({ pinned: true, firstPrompt: '' });
+
+    const manual = fakeHost([{ tier: ['deep', 0.8] }]);
+    const b = createTiergear({});
+    await b.promptSubmit(manual.host, typed('refactor the parser'));
+    await b.step(manual.host, engineStep('t1'));
+    await b.step(manual.host, engineStep('t2', 'claude-haiku-4-5'));
+    expect(manual.store.get('session:s1')).toMatchObject({ pinned: true, firstPrompt: '' });
+  });
+
   it('clears applied on !pin so the session runs on its own model and effort', async () => {
     const { host, store } = fakeHost([{ tier: ['deep', 0.8] }]);
     const tiergear = createTiergear({});

@@ -35,6 +35,15 @@ export interface SpawnResult {
   dispatch: WorkerDispatch | null;
 }
 
+// The direct path types the brief into the agent's prompt, where a leading `!` runs a shell command and `/` a command.
+export function briefProblem(brief: string): string | null {
+  const start = brief.trimStart()[0];
+  if (start === '!' || start === '/') return `the brief starts with '${start}', which a Claude Code prompt runs as a command; start it with text`;
+  // Line breaks and tabs only: a carriage return submits early and an escape drives the terminal.
+  if (/[\u0000-\u0008\u000b-\u001f\u007f-\u009f]/.test(brief)) return 'the brief contains control characters; only line breaks and tabs are allowed';
+  return null;
+}
+
 export async function spawnWorker(p: SpawnParams): Promise<SpawnResult> {
   // worker-start only works for the coordinator of a bound Run; without one, launch the agent directly.
   const runId = parseRunId(await p.orca(['orchestration', 'run-current']));

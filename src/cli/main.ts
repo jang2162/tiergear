@@ -6,7 +6,7 @@ import { cliJudgeOptions } from './judge.js';
 import { planLaunch, type LaunchPlan } from './launch.js';
 import { createOrcaExec } from './orca.js';
 import { homeDir, nodeSleep, nodeTransport } from './node.js';
-import { spawnWorker } from './spawn.js';
+import { briefProblem, spawnWorker } from './spawn.js';
 import { summarize } from './stats.js';
 
 export const USAGE = `usage:
@@ -92,6 +92,11 @@ export async function main(argv: string[]): Promise<number> {
 
   if (!values.name) {
     console.error(USAGE);
+    return 2;
+  }
+  const problem = briefProblem(brief);
+  if (problem) {
+    console.error(`tiergear: ${problem}`);
     return 2;
   }
   const spawnPlan = await plan(command, brief, harness, home, flags);

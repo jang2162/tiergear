@@ -38,6 +38,8 @@ describe('tiers', () => {
   it('builds launch commands and leaves out a null effort', () => {
     expect(launchCommand('claude', { model: 'opus', effort: 'xhigh' })).toBe('claude --model opus --effort xhigh');
     expect(launchCommand('claude', { model: 'haiku', effort: null })).toBe('claude --model haiku');
+    // A shell would glob the brackets, so such an id is quoted.
+    expect(launchCommand('claude', { model: 'opus[1m]', effort: 'high' })).toBe("claude --model 'opus[1m]' --effort high");
     expect(launchCommand('codex', { model: 'gpt-5.6-sol', effort: 'high' })).toBe('codex --model gpt-5.6-sol -c model_reasoning_effort="high"');
     expect(launchCommand('codex', { model: 'gpt-5.6-luna', effort: null })).toBe('codex --model gpt-5.6-luna');
   });
