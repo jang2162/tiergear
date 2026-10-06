@@ -22,6 +22,16 @@ export function pick(json: unknown, paths: readonly string[]): unknown {
   return undefined;
 }
 
+// A long --json call streams one-line keepalive objects before its result, so drop those first.
+export function parseOrcaOutput(stdout: string): unknown {
+  const body = stdout
+    .split('\n')
+    .filter((line) => !/^\{"_keepalive":true\b/.test(line.trim()))
+    .join('\n')
+    .trim();
+  return body ? safeJson(body) : null;
+}
+
 function safeJson(text: string): unknown {
   try {
     return JSON.parse(text);
@@ -40,7 +50,7 @@ export function createOrcaExec(binary = process.env['ORCA_CLI_COMMAND'] || 'orca
   return (args, cwd) =>
     new Promise((resolve, reject) => {
       execFile(binary, [...args, '--json'], { cwd, maxBuffer: 10 * 1024 * 1024 }, (error, stdout, stderr) => {
-        const parsed = stdout.trim() ? safeJson(stdout) : null;
+        const parsed = parseOrcaOutput(stdout);
         if (error) {
           const detail = (stderr || stdout || error.message).trim().slice(0, 300);
           reject(new OrcaError(`orca ${args.slice(0, 2).join(' ')} failed: ${detail}`, errorCode(parsed) ?? errorCode(safeJson(stderr))));
@@ -61,6 +71,38 @@ export function parseHandle(json: unknown): string {
   const handle = pick(json, ['result.terminal.handle', 'terminal.handle', 'handle']);
   if (typeof handle !== 'string' || !handle) throw new Error('orca terminal create returned no handle');
   return handle;
+}
+
+export function parseRunId(json: unknown): string | null {
+  const id = pick(json, ['result.run.id', 'run.id']);
+  return typeof id === 'string' && id ? id : null;
+}
+
+export interface WorkerDispatch {
+  runId: string;
+  taskId: string;
+  dispatchId: string;
+  handle: string;
+}
+
+export function parseWorkerStart(json: unknown): WorkerDispatch {
+  if (pick(json, ['ok']) === false) {
+    const code = errorCode(json);
+    const message = pick(json, ['error.message']);
+    throw new OrcaError(`orca orchestration worker-start failed: ${code ?? 'error'}: ${typeof message === 'string' ? message : ''}`.trim(), code);
+  }
+  const runId = pick(json, ['result.runId']);
+  const taskId = pick(json, ['result.taskId']);
+  const dispatchId = pick(json, ['result.dispatchId']);
+  const effects = pick(json, ['result.effects']);
+  const terminal = Array.isArray(effects)
+    ? effects.find((e): e is { id: unknown } => !!e && typeof e === 'object' && e.kind === 'terminal' && e.role === 'agent')
+    : undefined;
+  const handle = terminal?.id;
+  if (typeof runId !== 'string' || typeof taskId !== 'string' || typeof dispatchId !== 'string' || typeof handle !== 'string') {
+    throw new Error('orca orchestration worker-start returned no dispatch ids or agent terminal');
+  }
+  return { runId, taskId, dispatchId, handle };
 }
 
 export function parseSatisfied(json: unknown): boolean {

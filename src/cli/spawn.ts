@@ -1,6 +1,17 @@
 import type { Harness } from '../core/tiers.js';
 import type { LaunchPlan } from './launch.js';
-import { OrcaError, findAgentHandle, parseBlockedReason, parseHandle, parseSatisfied, parseWorktree, type OrcaExec } from './orca.js';
+import {
+  OrcaError,
+  findAgentHandle,
+  parseBlockedReason,
+  parseHandle,
+  parseRunId,
+  parseSatisfied,
+  parseWorkerStart,
+  parseWorktree,
+  type OrcaExec,
+  type WorkerDispatch,
+} from './orca.js';
 
 export const WAIT_FIRST_MS = 60_000;
 export const WAIT_RETRY_MS = 120_000;
@@ -10,6 +21,7 @@ export interface SpawnParams {
   name: string;
   harness: Harness;
   repoDir: string;
+  baseBranch?: string;
   plan: LaunchPlan;
   orca: OrcaExec;
   writeFloor: (worktreePath: string) => Promise<void>;
@@ -20,15 +32,31 @@ export interface SpawnResult {
   status: 'sent' | 'not-started';
   worktree: { id: string; path: string };
   handle: string;
+  dispatch: WorkerDispatch | null;
 }
 
 export async function spawnWorker(p: SpawnParams): Promise<SpawnResult> {
-  const worktree = parseWorktree(await p.orca(['worktree', 'create', '--name', p.name, '--no-parent'], p.repoDir));
+  // worker-start only works for the coordinator of a bound Run; without one, launch the agent directly.
+  const runId = parseRunId(await p.orca(['orchestration', 'run-current']));
+  const base = p.baseBranch ? ['--base-branch', p.baseBranch] : [];
+  const worktree = parseWorktree(await p.orca(['worktree', 'create', '--name', p.name, '--no-parent', ...base], p.repoDir));
   p.log(`worktree ${worktree.path}`);
-  // The floor must exist before the agent reads its first prompt.
+  // The floor must exist before the agent reads its first prompt, which worker-start sends itself.
   if (p.harness === 'claude') await p.writeFloor(worktree.path);
 
   const selector = `id:${worktree.id}`;
+  if (runId) {
+    const { model, effort } = p.plan.target;
+    const dispatch = parseWorkerStart(
+      await p.orca([
+        'orchestration', 'worker-start', '--spec', p.brief, '--task-title', p.name, '--worktree', selector,
+        '--agent', p.harness, '--model', model, ...(effort ? ['--effort', effort] : []),
+        // Same budget as the direct path, so there is time to approve a trust prompt in Orca.
+        '--timeout-ms', String(WAIT_FIRST_MS + WAIT_RETRY_MS),
+      ]),
+    );
+    return { status: 'sent', worktree, handle: dispatch.handle, dispatch };
+  }
   let handle = parseHandle(await p.orca(['terminal', 'create', '--worktree', selector, '--title', p.name, '--command', p.plan.command]));
 
   // After an Orca restart a handle goes stale: re-list once and continue with the replacement only.
@@ -56,8 +84,8 @@ export async function spawnWorker(p: SpawnParams): Promise<SpawnResult> {
     ready = parseSatisfied(await wait(WAIT_RETRY_MS));
   }
   // A prompt typed into a TUI that is still starting is lost, so never send blind.
-  if (!ready) return { status: 'not-started', worktree, handle };
+  if (!ready) return { status: 'not-started', worktree, handle, dispatch: null };
 
   await withHandle((h) => ['terminal', 'send', '--terminal', h, '--text', p.brief, '--enter']);
-  return { status: 'sent', worktree, handle };
+  return { status: 'sent', worktree, handle, dispatch: null };
 }

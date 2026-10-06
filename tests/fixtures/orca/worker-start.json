@@ -1,0 +1,86 @@
+{
+  "id": "1035ccdf-d57a-46bf-9e71-80885e742b77",
+  "ok": true,
+  "result": {
+    "runId": "run_2ff269eb54f7",
+    "taskId": "task_b4eb2db75c1d",
+    "dispatchId": "ctx_560165450ecd",
+    "state": "ready",
+    "stage": "input_accepted",
+    "turnStart": "observed",
+    "setup": {
+      "requested": "not_applicable",
+      "effective": "not_applicable",
+      "source": "existing_worktree",
+      "hookFound": false,
+      "startupPolicy": "start-immediately",
+      "state": "not_applicable"
+    },
+    "launch": {
+      "requested": {
+        "agent": "claude",
+        "model": "haiku",
+        "effort": null
+      },
+      "effective": {
+        "agent": "claude",
+        "model": "haiku",
+        "effort": null
+      }
+    },
+    "mode": {
+      "mode": "terminal",
+      "preferred": "terminal",
+      "reason": "user_default",
+      "detail": "Started a terminal agent worker, the default for new agent tabs in your settings."
+    },
+    "timeoutMs": 60000,
+    "effects": [
+      {
+        "kind": "worktree",
+        "action": "reused",
+        "id": "8db22c76-2921-46d5-a9c5-efd9d698eaf4::/Users/jang2162/IdeaProjects/tiergear/.worktrees/tiergear/tg-ws-probe"
+      },
+      {
+        "kind": "setup",
+        "action": "not_applicable",
+        "state": "not_applicable"
+      },
+      {
+        "kind": "terminal",
+        "role": "agent",
+        "action": "created",
+        "id": "term_949ab59a-43c0-4149-b443-6016c4216f97",
+        "surface": "visible"
+      },
+      {
+        "kind": "dispatch_input",
+        "role": "agent",
+        "id": "term_949ab59a-43c0-4149-b443-6016c4216f97",
+        "state": "accepted"
+      }
+    ],
+    "prompt": {
+      "requestId": "71da0736-c8f8-4a82-a760-c96e9dd482ef",
+      "stages": [
+        "input_accepted",
+        "turn_started"
+      ],
+      "provider": "claude",
+      "observation": "supported",
+      "processIncarnation": "ecea7476-d1bd-4b16-82a2-547d49e511db",
+      "generation": 389,
+      "baselineWorkingSequence": 0,
+      "baselineExplicitWorkingStartedAt": null,
+      "baselinePermissionSequence": 0
+    },
+    "residualResources": [],
+    "mutation": {
+      "requestId": "71da0736-c8f8-4a82-a760-c96e9dd482ef",
+      "replayed": false
+    }
+  },
+  "_meta": {
+    "runtimeId": "fb124fe1-5699-4e66-bc6c-a62d8d31a1a0"
+  }
+}

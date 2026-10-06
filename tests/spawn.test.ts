@@ -1,19 +1,33 @@
 import { describe, expect, it } from 'vitest';
 import type { LaunchPlan } from '../src/cli/launch.js';
 import { OrcaError, type OrcaExec } from '../src/cli/orca.js';
-import { spawnWorker } from '../src/cli/spawn.js';
+import { spawnWorker, type SpawnParams } from '../src/cli/spawn.js';
 
 const plan: LaunchPlan = {
   tier: 'deep', confidence: 0.8, target: { model: 'opus', effort: 'xhigh' },
   command: 'claude --model opus --effort xhigh', warning: null, outcome: 'ok', ms: 300,
 };
 
-function fakeOrca(waits: (boolean | { satisfied: boolean; blockedReason?: string })[], options: { staleOnce?: boolean } = {}) {
+const receipt = {
+  ok: true,
+  result: {
+    runId: 'run_1', taskId: 'task_1', dispatchId: 'ctx_1',
+    effects: [
+      { kind: 'worktree', action: 'reused', id: 'r1::/w/task' },
+      { kind: 'terminal', role: 'agent', action: 'created', id: 'term_w' },
+    ],
+  },
+};
+
+function fakeOrca(waits: (boolean | { satisfied: boolean; blockedReason?: string })[], options: { staleOnce?: boolean; run?: string | null; events?: string[] } = {}) {
   const calls: { args: string[]; cwd?: string }[] = [];
   let stale = options.staleOnce ?? false;
   const exec: OrcaExec = async (args, cwd) => {
     calls.push({ args: [...args], cwd });
+    options.events?.push(`${args[0]} ${args[1]}`);
     const [group, action] = args;
+    if (group === 'orchestration' && action === 'run-current') return { ok: true, result: { run: options.run ? { id: options.run } : null } };
+    if (group === 'orchestration' && action === 'worker-start') return receipt;
     if (group === 'worktree' && action === 'create') return { worktree: { id: 'r1::/w/task' } };
     if (group === 'terminal' && action === 'create') return { terminal: { handle: 'h1' } };
     if (group === 'terminal' && action === 'list') return { terminals: [{ title: 'claude', handle: 'h2', worktreeId: 'r1::/w/task', agentIdentity: 'claude' }] };
@@ -31,19 +45,20 @@ function fakeOrca(waits: (boolean | { satisfied: boolean; blockedReason?: string
   return { exec, calls };
 }
 
-function run(exec: OrcaExec, brief = 'fix it', floors: string[] = [], logs: string[] = []) {
-  return spawnWorker({ brief, name: 'task', harness: 'claude', repoDir: '/repo', plan, orca: exec, writeFloor: async (p) => void floors.push(p), log: (l) => void logs.push(l) });
+function run(exec: OrcaExec, overrides: Partial<SpawnParams> = {}) {
+  return spawnWorker({ brief: 'fix it', name: 'task', harness: 'claude', repoDir: '/repo', plan, orca: exec, writeFloor: async () => {}, log: () => {}, ...overrides });
 }
 
-describe('spawnWorker', () => {
+describe('spawnWorker without a bound run', () => {
   it('creates, writes the floor, launches, waits and sends the brief verbatim', async () => {
     const { exec, calls } = fakeOrca([true]);
     const floors: string[] = [];
     const brief = 'fix "the" bug\nthen run $HOME/test';
-    const result = await run(exec, brief, floors);
-    expect(result).toEqual({ status: 'sent', worktree: { id: 'r1::/w/task', path: '/w/task' }, handle: 'h1' });
-    expect(calls[0]).toEqual({ args: ['worktree', 'create', '--name', 'task', '--no-parent'], cwd: '/repo' });
-    expect(calls[1]!.args).toEqual(['terminal', 'create', '--worktree', 'id:r1::/w/task', '--title', 'task', '--command', 'claude --model opus --effort xhigh']);
+    const result = await run(exec, { brief, writeFloor: async (p) => void floors.push(p) });
+    expect(result).toEqual({ status: 'sent', worktree: { id: 'r1::/w/task', path: '/w/task' }, handle: 'h1', dispatch: null });
+    expect(calls[0]!.args).toEqual(['orchestration', 'run-current']);
+    expect(calls[1]).toEqual({ args: ['worktree', 'create', '--name', 'task', '--no-parent'], cwd: '/repo' });
+    expect(calls[2]!.args).toEqual(['terminal', 'create', '--worktree', 'id:r1::/w/task', '--title', 'task', '--command', 'claude --model opus --effort xhigh']);
     expect(calls.at(-1)!.args).toEqual(['terminal', 'send', '--terminal', 'h1', '--text', brief, '--enter']);
     expect(floors).toEqual(['/w/task']);
   });
@@ -66,16 +81,55 @@ describe('spawnWorker', () => {
   it('writes no floor for a Codex worker', async () => {
     const { exec } = fakeOrca([true]);
     const floors: string[] = [];
-    await spawnWorker({ brief: 'b', name: 'task', harness: 'codex', repoDir: '/repo', plan, orca: exec, writeFloor: async (p) => void floors.push(p), log: () => {} });
+    await run(exec, { harness: 'codex', writeFloor: async (p) => void floors.push(p) });
     expect(floors).toEqual([]);
   });
 
   it('logs the trust prompt, never answers it, and sends once the retry wait is satisfied', async () => {
     const { exec, calls } = fakeOrca([{ satisfied: false, blockedReason: 'agent-trust-workspace' }, { satisfied: true }]);
     const logs: string[] = [];
-    const result = await run(exec, 'fix it', [], logs);
+    const result = await run(exec, { log: (l) => void logs.push(l) });
     expect(result.status).toBe('sent');
     expect(logs).toContain('Claude is asking whether to trust /w/task; approve it in Orca — waiting up to 120s');
     expect(calls.filter((c) => c.args[1] === 'send')).toHaveLength(1);
+  });
+
+  it('creates the worktree from the given base branch', async () => {
+    const { exec, calls } = fakeOrca([true]);
+    await run(exec, { baseBranch: 'main' });
+    expect(calls[1]!.args).toEqual(['worktree', 'create', '--name', 'task', '--no-parent', '--base-branch', 'main']);
+  });
+});
+
+describe('spawnWorker with a bound run', () => {
+  it('writes the floor before worker-start places the agent in the new worktree with the judged model and effort', async () => {
+    const events: string[] = [];
+    const { exec, calls } = fakeOrca([], { run: 'run_1', events });
+    const result = await run(exec, { writeFloor: async (p) => void events.push(`floor ${p}`) });
+    expect(events).toEqual(['orchestration run-current', 'worktree create', 'floor /w/task', 'orchestration worker-start']);
+    expect(calls.at(-1)!.args).toEqual([
+      'orchestration', 'worker-start', '--spec', 'fix it', '--task-title', 'task', '--worktree', 'id:r1::/w/task',
+      '--agent', 'claude', '--model', 'opus', '--effort', 'xhigh', '--timeout-ms', '180000',
+    ]);
+    expect(result).toEqual({
+      status: 'sent',
+      worktree: { id: 'r1::/w/task', path: '/w/task' },
+      handle: 'term_w',
+      dispatch: { runId: 'run_1', taskId: 'task_1', dispatchId: 'ctx_1', handle: 'term_w' },
+    });
+  });
+
+  it('omits --effort for a model without effort', async () => {
+    const { exec, calls } = fakeOrca([], { run: 'run_1' });
+    await run(exec, { plan: { ...plan, tier: 'trivial', target: { model: 'haiku', effort: null }, command: 'claude --model haiku' } });
+    const start = calls.at(-1)!.args;
+    expect(start).toContain('haiku');
+    expect(start).not.toContain('--effort');
+  });
+
+  it('never types into a terminal itself', async () => {
+    const { exec, calls } = fakeOrca([], { run: 'run_1' });
+    await run(exec);
+    expect(calls.some((c) => c.args[0] === 'terminal')).toBe(false);
   });
 });

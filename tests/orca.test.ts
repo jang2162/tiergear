@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
-import { errorCode, findAgentHandle, parseBlockedReason, parseHandle, parseSatisfied, parseWorktree } from '../src/cli/orca.js';
+import { OrcaError, errorCode, findAgentHandle, parseBlockedReason, parseHandle, parseOrcaOutput, parseRunId, parseSatisfied, parseWorkerStart, parseWorktree } from '../src/cli/orca.js';
 
 const fixture = (name: string): unknown => JSON.parse(readFileSync(`tests/fixtures/orca/${name}.json`, 'utf8'));
 
@@ -23,6 +23,40 @@ describe('orca parsers on recorded output', () => {
   it('reads the blocked reason of an unsatisfied wait', () => {
     expect(parseBlockedReason(fixture('terminal-wait'))).toBe('agent-trust-workspace');
     expect(parseBlockedReason({ wait: { satisfied: true } })).toBeNull();
+  });
+
+  it('reads the bound run, or null when none is bound', () => {
+    expect(parseRunId(fixture('run-current'))).toBe('run_2ff269eb54f7');
+    expect(parseRunId({ ok: true, result: { run: null } })).toBeNull();
+  });
+
+  it('reads the lifecycle ids and agent terminal from a worker-start receipt', () => {
+    expect(parseWorkerStart(fixture('worker-start'))).toEqual({
+      runId: 'run_2ff269eb54f7',
+      taskId: 'task_b4eb2db75c1d',
+      dispatchId: 'ctx_560165450ecd',
+      handle: 'term_949ab59a-43c0-4149-b443-6016c4216f97',
+    });
+  });
+});
+
+describe('parseWorkerStart', () => {
+  it('turns a failed receipt into an OrcaError with its code', () => {
+    const failed = { ok: false, error: { code: 'consumer_fenced', message: 'worker-start requires the coordinator terminal' } };
+    expect(() => parseWorkerStart(failed)).toThrow(OrcaError);
+    expect(() => parseWorkerStart(failed)).toThrow('consumer_fenced');
+  });
+});
+
+describe('parseOrcaOutput', () => {
+  it('skips the keepalive lines a long --json call streams before its result', () => {
+    const stdout = '{"_keepalive":true,"_heartbeat":true,"elapsedMs":15001,"deadlineMs":120000}\n{\n  "ok": true,\n  "result": { "run": null }\n}\n';
+    expect(parseOrcaOutput(stdout)).toEqual({ ok: true, result: { run: null } });
+  });
+
+  it('returns null for empty or unparseable output', () => {
+    expect(parseOrcaOutput('')).toBeNull();
+    expect(parseOrcaOutput('not json')).toBeNull();
   });
 });
 

@@ -4,7 +4,7 @@ A plugin and CLI that lets a decision model (the judge) pick the model and reaso
 
 - **First turn**: the first prompt goes to the judge, which returns a tier (trivial, quick, standard, deep, max). Tables A and B turn that into a model and effort. The first turn has no cache to lose, so the model changes too.
 - **Later turns**: by default the model stays and only effort changes. Raising is easy (confidence 0.5); lowering is hard (confidence 0.85 for 2 turns in a row).
-- **Floor**: the tier never drops below one step under the first decision. Sessions started with `tiergear launch`/`spawn` use the launch tier as their floor.
+- **Floor**: the tier never drops below one step under the first decision. Sessions started with `tiergear launch`/`orca-spawn` use the launch tier as their floor.
 - **`!pin`**: start a prompt with `!pin` to pin the session. tiergear withdraws the model and effort it was applying, and from then on the session's own model and effort (set by startup flags or `/model`, `/effort`) are used as is. The `!pin` prefix is stripped before the prompt reaches the judge and the model.
 - **Manual changes pause routing**: changing the model or effort yourself with `/model` or `/effort` mid-session stops adjustment for that session, just like `!pin`, and writes `[tiergear] manual model/effort change — routing paused for this session` to the hook log once. It compares the session values the engine reports between turns, so tiergear's own changes don't trigger it. If the engine switches to a fallback model from the first request of a turn, that can also look like a manual change.
 
@@ -113,13 +113,15 @@ Reasons for no change: `no answer` (no judge response), `low confidence`, `same 
 
 ```bash
 tiergear launch "<brief>" [--agent claude|codex] [--worktree <path>] [--judge jev|laya|kev] [--judge-url <url>] [--judge-model <name>]
-tiergear spawn  "<brief>" --name <task> [--agent claude|codex] [--repo <dir>] [--judge ...]
+tiergear orca-spawn "<brief>" --name <task> [--agent claude|codex] [--repo <dir>] [--base-branch <ref>] [--judge ...]
 tiergear stats [days]
 ```
 
 - `launch`: judges the brief and prints the command to run (e.g. `claude --model opus --effort xhigh`). With Claude, `--worktree` writes a floor for that path. The path is stored as an absolute real path (symlinks resolved), so a relative path still works for a session opened in that folder. With `--agent codex`, floors are Claude-only, so none is written and a one-line note is printed instead.
-- `spawn`: creates an Orca worktree and terminal, starts the agent with the judged model and effort, then sends the brief. Prints the result as JSON.
-  - If Claude asks whether to trust the folder, **`spawn` does not approve it for you.** Approve it yourself in Orca within 120 seconds. If the agent isn't ready, the brief is **not sent** (exit code 1) and a fallback shell may be left in the worktree.
+- `orca-spawn`: creates an Orca worktree, writes the floor, and starts the agent there with the judged model and effort. Prints the result as JSON. `--base-branch` picks the ref the worktree starts from; without it Orca uses the repo's default base, which may be a remote branch behind your local one.
+  - **Inside an orchestration Run** (run from the coordinator terminal after `orca orchestration run-create`): starts the agent with `orca orchestration worker-start`, so the worker gets Orca's lifecycle preamble and reports `worker_done` to the Run. The JSON includes `dispatch` (`runId`, `taskId`, `dispatchId`, `handle`). A failed `worker-start` exits non-zero with Orca's error; don't rerun it blindly, since Orca may have left resources behind.
+  - **Without a Run**: creates a terminal, waits for the agent, then types the brief as is (no preamble, `dispatch` is `null`). If Claude asks whether to trust the folder, **`orca-spawn` does not approve it for you.** Approve it yourself in Orca within 120 seconds. If the agent isn't ready, the brief is **not sent** (exit code 1) and a fallback shell may be left in the worktree.
+  - The floor is written before the agent's first prompt in both cases. Without it, the first turn would be judged on Orca's preamble, which usually gives low confidence.
 - `stats`: number of recorded decisions, counts by change type, and response rate and average latency per judge (default 7 days).
 - A floor is written only when the judge actually decided. If the judge failed, didn't answer, or had low confidence and standard was used instead, no floor is written and a warning is printed.
 - The CLI's judge timeout is 5000ms.
@@ -160,7 +162,7 @@ Raw prompt text is never written to the logs.
 
 ## Limitations
 
-- Codex gets its model and effort only at launch (`launch`/`spawn`). Mid-session adjustment works only in Claude Code.
+- Codex gets its model and effort only at launch (`launch`/`orca-spawn`). Mid-session adjustment works only in Claude Code.
 - Hooks are an early-access feature, so the contract can change with Claude Code updates. `types/claude-code.d.ts` is the declaration file generated by Claude Code 2.1.289. After an update, replace it with the `.claude-plugin/types/claude-code/index.d.ts` the engine writes next to the plugin.
 - The confidence thresholds (0.5, 0.85, 0.6) are tuned for Jev. For other judges, check response rate and latency with `tiergear stats` and adjust the options.
 - Subagent requests are left alone; only main-loop requests are changed.

@@ -11,7 +11,7 @@ import { summarize } from './stats.js';
 
 export const USAGE = `usage:
   tiergear launch "<brief>" [--agent claude|codex] [--worktree <path>] [--judge jev|laya|kev] [--judge-url <url>] [--judge-model <name>]
-  tiergear spawn "<brief>" --name <task> [--agent claude|codex] [--repo <dir>] [--judge ...]
+  tiergear orca-spawn "<brief>" --name <task> [--agent claude|codex] [--repo <dir>] [--base-branch <ref>] [--judge ...]
   tiergear stats [days]`;
 
 async function plan(
@@ -57,6 +57,7 @@ export async function main(argv: string[]): Promise<number> {
       worktree: { type: 'string' },
       name: { type: 'string' },
       repo: { type: 'string' },
+      'base-branch': { type: 'string' },
       judge: { type: 'string' },
       'judge-url': { type: 'string' },
       'judge-model': { type: 'string' },
@@ -72,7 +73,7 @@ export async function main(argv: string[]): Promise<number> {
 
   const brief = positionals.join(' ').trim();
   const harness = values.agent;
-  if ((command !== 'launch' && command !== 'spawn') || !brief || (harness !== 'claude' && harness !== 'codex')) {
+  if ((command !== 'launch' && command !== 'orca-spawn') || !brief || (harness !== 'claude' && harness !== 'codex')) {
     console.error(USAGE);
     return 2;
   }
@@ -99,6 +100,7 @@ export async function main(argv: string[]): Promise<number> {
     name: values.name,
     harness,
     repoDir: values.repo ?? process.cwd(),
+    baseBranch: values['base-branch'],
     plan: spawnPlan,
     orca: createOrcaExec(),
     writeFloor: async (path) => {

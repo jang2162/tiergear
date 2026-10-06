@@ -1,0 +1,18 @@
+{
+  "id": "431c510b-f37b-42f0-baa4-c7dff19df749",
+  "ok": true,
+  "result": {
+    "run": {
+      "id": "run_2ff269eb54f7",
+      "objective": "tiergear orca-spawn probe",
+      "coordinator_handle": "term_76b6f726-2978-4282-bc59-31bd766eb845",
+      "consumer_generation": 1,
+      "legacy": 0,
+      "created_at": "2026-10-06T02:29:14Z",
+      "updated_at": "2026-10-06T02:29:14Z"
+    }
+  },
+  "_meta": {
+    "runtimeId": "fb124fe1-5699-4e66-bc6c-a62d8d31a1a0"
+  }
+}
