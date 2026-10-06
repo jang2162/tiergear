@@ -139,7 +139,7 @@ Change these in `/config` (plugin options).
 | `judgeBaseUrl` | preset | Leave empty for the preset's address. Must be https, or http to localhost |
 | `judgeModel` | preset | Leave empty for the preset's model |
 | `judgeApiKey` | preset env var | Leave empty to use TYPESAFE_API_KEY, OLLAYA_API_KEY, or KEV_API_KEY, which only go to the preset's own address (sensitive) |
-| `switchModelMidSession` | `false` | Also change the model after the first turn (breaks the prompt cache). Off: only effort changes |
+| `switchModelMidSession` | `false` | Also change the model after the first turn. Off: only effort changes. Either change breaks the messages prompt cache; a model change also breaks the tools and system caches |
 | `instantSwitchConfidence` | off | Confidence · instant switch: a lower tier the judge is at least this sure of applies at once, straight to that tier (never under the floor), skipping `downgradeStreak`. Leave unset or 0 to keep it off |
 | `minDowngradeConfidence` | `0.85` | Confidence · lower: minimum confidence for a turn to count toward lowering |
 | `minUpgradeConfidence` | `0.5` | Confidence · raise: minimum confidence to raise the tier |
