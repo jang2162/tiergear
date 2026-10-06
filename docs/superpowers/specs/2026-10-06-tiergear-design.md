@@ -56,13 +56,13 @@ core(판단 로직) + 판단기(Judge) + 하네스 어댑터. v1 판단기는 sy
 
 ### 표 A: tier → 모델
 
-| tier | Claude Code | Codex (구현 첫 단계에서 실제 이름 확인) |
+| tier | Claude Code | Codex (이 머신의 Codex 모델 캐시에서 확인된 모델만) |
 | --- | --- | --- |
 | trivial | haiku | gpt-5.6-luna |
 | quick | sonnet | gpt-5.6-terra |
 | standard | sonnet | gpt-5.6-terra |
-| deep | opus | gpt-5.6-sol |
-| max | fable | gpt-6-astra |
+| deep | opus | gpt-5.6-terra |
+| max | fable | gpt-5.6-terra |
 
 ### 표 B: 모델별 tier → effort
 
@@ -78,15 +78,15 @@ Claude Code:
 | deep | - | high | xhigh | high |
 | max | - | max | max | xhigh |
 
-Codex(값은 구현 첫 단계에서 허용 값 확인 후 확정):
+Codex(gpt-5.6-sol, gpt-6-astra는 이 머신의 캐시에 없어서 뺐다. 더 큰 모델이 보이면 tables.json으로 추가한다):
 
-| tier | gpt-5.6-luna | gpt-5.6-terra | gpt-5.6-sol | gpt-6-astra |
-| --- | --- | --- | --- | --- |
-| trivial | low | low | low | low |
-| quick | low | low | low | low |
-| standard | medium | medium | medium | medium |
-| deep | high | high | high | high |
-| max | high | xhigh | xhigh | xhigh |
+| tier | gpt-5.6-luna | gpt-5.6-terra |
+| --- | --- | --- |
+| trivial | low | low |
+| quick | low | low |
+| standard | medium | medium |
+| deep | high | xhigh |
+| max | high | max |
 
 ### 적용 규칙
 
