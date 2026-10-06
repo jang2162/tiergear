@@ -23,6 +23,14 @@ describe('status', () => {
     expect(formatStatus(base, '[{line}]')).toBe(`[${base.line}]`);
   });
 
+  it('names the model as Claude Code does in a template', () => {
+    expect(formatStatus(base, 'Model: {modelName}  {effort} ({tier})')).toBe('Model: Opus 5.5  xhigh (deep)');
+    expect(formatStatus({ ...base, model: 'haiku' }, '{modelName}')).toBe('Haiku 4.5');
+    expect(formatStatus({ ...base, model: 'fable' }, '{modelName}')).toBe('Fable 5.1');
+    expect(formatStatus({ ...base, model: 'gpt-5.6-terra' }, '{modelName}')).toBe('gpt-5.6-terra');
+    expect(formatStatus({ ...base, model: null }, '{modelName}')).toBe('-');
+  });
+
   it('gives one value alone, empty when it is not known', () => {
     expect(statusField(base, 'tier')).toBe('deep');
     expect(statusField(base, 'model')).toBe('opus');

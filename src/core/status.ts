@@ -1,4 +1,4 @@
-import { isTier, type Tier } from './tiers.js';
+import { claudeModelId, isTier, type Tier } from './tiers.js';
 
 /** What the band shows for one session, written for status-line tools (`tiergear status`). */
 export interface StatusRecord {
@@ -51,17 +51,24 @@ export function statusField(status: StatusRecord, field: StatusField): string {
   return value === null ? '' : String(value);
 }
 
-// Placeholders: {tier} {model} {effort} {state} (auto or paused) {line} (the band's text).
+// As Claude Code names a model: claude-opus-5-5 is "Opus 5.5"; anything else keeps its own name.
+function modelName(model: string): string {
+  const match = /^claude-([a-z]+)-(\d+)-(\d+)$/.exec(claudeModelId(model));
+  return match ? `${match[1]![0]!.toUpperCase()}${match[1]!.slice(1)} ${match[2]}.${match[3]}` : model;
+}
+
+// Placeholders: {tier} {model} {modelName} (as Claude Code names it) {effort} {state} (auto or paused) {line} (the band's text).
 export function formatStatus(status: StatusRecord, template?: string): string {
   if (template !== undefined) {
     const values: Record<string, string> = {
       tier: status.tier ?? 'unset',
       model: status.model ?? '-',
+      modelName: status.model === null ? '-' : modelName(status.model),
       effort: status.effort === null ? '-' : String(status.effort),
       state: status.paused ? 'paused' : 'auto',
       line: status.line,
     };
-    return template.replace(/\{(tier|model|effort|state|line)\}/g, (_, key: string) => values[key]!);
+    return template.replace(/\{(tier|modelName|model|effort|state|line)\}/g, (_, key: string) => values[key]!);
   }
   const effort = status.effort === null ? null : String(status.effort);
   const ran = status.model ? `${status.model}/${effort ?? '-'}` : effort;
