@@ -2,18 +2,20 @@ import type { EngineInterface, On, PluginOptions, Register } from 'claude-code';
 
 import { resolveConfig, type Config } from '../src/core/config.js';
 import {
+  FIRST_PROMPT_CHARS,
   MAX_RECORDS,
   RECORD_TTL_MS,
   canAskJudge,
   decideFirstTurn,
   decideNextTurn,
+  decidePause,
+  decidePick,
+  decideResume,
   inEffect,
-  isPinPrompt,
   newRecord,
   noteJudgeOutcome,
   parseRecord,
   statusText,
-  stripPin,
   type Applied,
   type Decision,
   type SessionRecord,
@@ -24,9 +26,10 @@ import type { AskResult, Judge, Verdict } from '../src/core/judge.js';
 import { JUDGE_PRESETS, isAllowedJudgeUrl, isJudgeName, presetKeyApplies } from '../src/core/judges/presets.js';
 import { createSystemOneJudge } from '../src/core/judges/systemone.js';
 import { appendLogLine, decisionLogPath, recentDecisionLines, type LogEntry } from '../src/core/log.js';
-import { firstTurnState, nextTurnState, type ContextMessage } from '../src/core/state.js';
+import { abridge, firstTurnState, nextTurnState, type ContextMessage } from '../src/core/state.js';
+import { statusPath, type StatusRecord } from '../src/core/status.js';
 import { DEFAULT_TABLES, parseTablesFile, tablesPath, type Tables } from '../src/core/tables.js';
-import { claudeAlias, claudeModelId } from '../src/core/tiers.js';
+import { TIER_ORDER, claudeAlias, claudeModelId, isTier, type Tier } from '../src/core/tiers.js';
 
 interface SessionMessageLike {
   role: string;
@@ -135,7 +138,19 @@ interface SessionMemory {
   shown: Decision | null;
   // The text last put on the status line, which the band above the prompt repeats.
   statusLine: string | null;
+  // The session's record as last saved, for the band's controls; undefined until read from the store.
+  record: SessionRecord | null | undefined;
 }
+
+/** What the band's controls show: the tier, and whether routing is paused. */
+export interface Controls {
+  tier: Tier | null;
+  paused: boolean;
+}
+
+type LogDetail = Pick<LogEntry, 'phase' | 'outcome' | 'ms' | 'stuck' | 'proposed'>;
+
+const MANUAL: LogDetail = { phase: 'manual', outcome: 'skipped', ms: null, stuck: null, proposed: null };
 
 const REMEMBERED_SESSIONS = 8;
 
@@ -150,7 +165,7 @@ export function createTiergear(options: Readonly<Record<string, unknown>>) {
   function memory(session: string): SessionMemory {
     let found = sessions.get(session);
     if (!found) {
-      found = { applied: null, failures: EMPTY_TRACKER, sessionModel: null, engine: null, shown: null, statusLine: null };
+      found = { applied: null, failures: EMPTY_TRACKER, sessionModel: null, engine: null, shown: null, statusLine: null, record: undefined };
       sessions.set(session, found);
       if (sessions.size > REMEMBERED_SESSIONS) sessions.delete(sessions.keys().next().value!);
     }
@@ -221,11 +236,61 @@ export function createTiergear(options: Readonly<Record<string, unknown>>) {
     }
   }
 
+  // Puts the last decision on the band with the engine's values, and writes it for status-line tools when it changed.
+  async function show(host: HookHost, session: string, mem: SessionMemory): Promise<void> {
+    if (!mem.shown) return;
+    const current = inEffect(mem.applied, mem.engine);
+    const line = statusText(mem.shown, current);
+    if (line === mem.statusLine) return;
+    mem.statusLine = line;
+    try {
+      const home = await host.env.get('HOME');
+      if (!home) return;
+      const { record, reason } = mem.shown;
+      const status: StatusRecord = {
+        session,
+        tier: record.tier,
+        model: current?.model ?? null,
+        effort: current?.effort ?? null,
+        paused: record.pinned,
+        reason,
+        line,
+        updatedAt: await host.clock.now(),
+      };
+      await host.fs.write(statusPath(home, session), JSON.stringify(status));
+    } catch (error) {
+      host.ui.log(`[tiergear] status not written: ${errorText(error)}`);
+    }
+  }
+
+  // Saves a decision and shows it: the store, what turn.step applies, the band, the status file and the log.
+  async function commit(host: HookHost, session: string, mem: SessionMemory, decision: Decision, now: number, detail: LogDetail): Promise<void> {
+    // A paused session asks the judge nothing, so its first prompt has no use until it resumes.
+    const saved: SessionRecord = { ...decision.record, ...(decision.record.pinned ? { firstPrompt: '' } : {}), updatedAt: now };
+    await host.store.set(`session:${session}`, saved);
+    mem.applied = saved.applied;
+    mem.record = saved;
+    mem.shown = { ...decision, record: saved };
+    await show(host, session, mem);
+    await writeLog(host, session, {
+      at: now,
+      source: 'hook',
+      session,
+      judge: config.judge,
+      tier: saved.tier,
+      change: decision.change,
+      confidence: decision.confidence,
+      applied: saved.applied,
+      reason: decision.reason,
+      ...detail,
+    });
+    // After the log line, so an open pane redraws with it.
+    host.ui.refresh();
+  }
+
   async function promptSubmit(host: HookHost, submitted: PromptLike): Promise<string> {
-    const text = submitted.text;
-    if (!isJudgedPrompt(submitted) || text.trim().startsWith('/')) return text;
-    const pin = isPinPrompt(text);
-    const prompt = pin ? stripPin(text) : text;
+    const prompt = submitted.text;
+    if (!isJudgedPrompt(submitted) || prompt.trim().startsWith('/')) return prompt;
     if (judgeNameWarning) {
       host.ui.log(judgeNameWarning);
       judgeNameWarning = null;
@@ -237,9 +302,11 @@ export function createTiergear(options: Readonly<Record<string, unknown>>) {
       const key = `session:${session}`;
       const tableSet = await loadTables(host);
       const stored = parseRecord(await host.store.get(key));
-      const first = stored === null;
+      // A record a control made before the first prompt still leaves this the first turn.
+      const first = stored === null || !stored.started;
       let record: SessionRecord = stored ?? newRecord(prompt, now);
-      if (pin) record = { ...record, pinned: true };
+      // Such a record, or one resumed after a pause, takes its task from this prompt.
+      if (!record.pinned && record.firstPrompt === '') record = { ...record, firstPrompt: abridge(prompt, FIRST_PROMPT_CHARS) };
 
       let verdict: Verdict | null = null;
       let outcome = 'skipped';
@@ -275,7 +342,7 @@ export function createTiergear(options: Readonly<Record<string, unknown>>) {
       let decision: Decision;
       if (first) {
         const floor = await readFloor(host, now);
-        if (!floor && !record.pinned) await ask(async () => firstTurnState(prompt), false, config.firstTurnTimeoutMs);
+        if (!floor && !record.pinned && record.tier === null) await ask(async () => firstTurnState(prompt), false, config.firstTurnTimeoutMs);
         decision = decideFirstTurn({ record, floor, verdict, config, tables: tableSet });
       } else {
         if (!record.pinned && canAskJudge(record, now)) {
@@ -294,37 +361,20 @@ export function createTiergear(options: Readonly<Record<string, unknown>>) {
         if (decision.change === 'up') mem.failures = EMPTY_TRACKER;
       }
 
-      // A pinned session never asks the judge again, so its first prompt has no use left.
-      const saved: SessionRecord = { ...decision.record, ...(decision.record.pinned ? { firstPrompt: '' } : {}), updatedAt: now };
-      await host.store.set(key, saved);
-      mem.applied = saved.applied;
+      await commit(host, session, mem, { ...decision, record: { ...decision.record, started: true } }, now, {
+        phase: first ? 'first' : 'next',
+        stuck: (verdict as Verdict | null)?.stuck ?? null,
+        outcome,
+        ms,
+        proposed: (verdict as Verdict | null)?.tier?.tier ?? null,
+      });
       // Pruned after the save, so the cap counts this session's record as the newest.
-      if (first) await pruneRecords(host, now);
-      mem.shown = { ...decision, record: saved };
-      mem.statusLine = statusText(mem.shown, inEffect(saved.applied, mem.engine));
+      if (stored === null) await pruneRecords(host, now);
       // The band above the prompt shows the line now; clear the one an earlier version left below it.
       if (!statusCleared) {
         host.ui.status(undefined);
         statusCleared = true;
       }
-      await writeLog(host, session, {
-        at: now,
-        source: 'hook',
-        session,
-        phase: first ? 'first' : 'next',
-        judge: config.judge,
-        tier: saved.tier,
-        change: decision.change,
-        confidence: decision.confidence,
-        stuck: (verdict as Verdict | null)?.stuck ?? null,
-        outcome,
-        ms,
-        applied: saved.applied,
-        reason: decision.reason,
-        proposed: (verdict as Verdict | null)?.tier?.tier ?? null,
-      });
-      // After the log line, so an open pane redraws with it.
-      host.ui.refresh();
     } catch (error) {
       host.ui.log(`[tiergear] left the turn alone: ${errorText(error)}`);
     }
@@ -334,14 +384,12 @@ export function createTiergear(options: Readonly<Record<string, unknown>>) {
   // A change of the engine-reported model or effort between turns is the user's (/model, /effort): routing stops.
   async function pauseForManualChange(host: HookHost, session: string, mem: SessionMemory): Promise<void> {
     mem.applied = null;
-    if (mem.shown) mem.shown = { ...mem.shown, change: 'hold', reason: 'pinned' };
     try {
-      const key = `session:${session}`;
       const now = await host.clock.now();
-      const record = parseRecord(await host.store.get(key)) ?? newRecord('', now);
+      const record = parseRecord(await host.store.get(`session:${session}`)) ?? newRecord('', now);
       if (record.pinned) return;
       host.ui.log('[tiergear] manual model/effort change — routing paused for this session');
-      await host.store.set(key, { ...record, pinned: true, applied: null, firstPrompt: '', updatedAt: now });
+      await commit(host, session, mem, decidePause(record), now, MANUAL);
     } catch (error) {
       host.ui.log(`[tiergear] pause not saved: ${errorText(error)}`);
     }
@@ -366,16 +414,47 @@ export function createTiergear(options: Readonly<Record<string, unknown>>) {
       mem.engine = { turnId: e.turnId, model, effort };
       if (seen !== null && (seen.model !== model || seen.effort !== effort)) await pauseForManualChange(host, session, mem);
       if (mem.shown) {
-        mem.statusLine = statusText(mem.shown, inEffect(mem.applied, { model, effort }));
+        await show(host, session, mem);
         host.ui.refresh();
       }
     }
     return stepOverride(mem.applied, e);
   }
 
+  // The band's controls act on the stored record; a session without one (no prompt yet) starts one.
+  async function control(host: HookHost, what: string, decide: (record: SessionRecord, mem: SessionMemory, tables: Tables) => Decision): Promise<void> {
+    try {
+      const now = await host.clock.now();
+      const session = await host.session.id();
+      const mem = memory(session);
+      const stored = parseRecord(await host.store.get(`session:${session}`));
+      const record = stored ?? { ...newRecord('', now), started: false };
+      await commit(host, session, mem, decide(record, mem, await loadTables(host)), now, MANUAL);
+      if (stored === null) await pruneRecords(host, now);
+    } catch (error) {
+      host.ui.log(`[tiergear] ${what} not done: ${errorText(error)}`);
+    }
+  }
+
   return {
     promptSubmit,
     step,
+    /** A tier picked in the band: applied from the next main-loop request, then moved by the judge as usual. */
+    pick: (host: HookHost, tier: Tier): Promise<void> =>
+      control(host, 'tier pick', (record, mem, t) => decidePick({ record, tier, sessionModel: mem.sessionModel, config, tables: t })),
+    /** [ Pause ] withdraws everything tiergear applies; [ Resume ] applies the tier again and asks the judge from the next prompt. */
+    togglePause: (host: HookHost): Promise<void> =>
+      control(host, 'pause', (record, mem, t) => (record.pinned ? decideResume({ record, sessionModel: mem.sessionModel, config, tables: t }) : decidePause(record))),
+    async controls(host: HookHost): Promise<Controls> {
+      try {
+        const session = await host.session.id();
+        const mem = memory(session);
+        if (mem.record === undefined) mem.record = parseRecord(await host.store.get(`session:${session}`));
+        return { tier: mem.record?.tier ?? null, paused: mem.record?.pinned ?? false };
+      } catch {
+        return { tier: null, paused: false };
+      }
+    },
     toolResult(session: string, tool: string, isError: boolean, text: string | undefined): void {
       const mem = memory(session);
       mem.failures = isError ? recordFailure(mem.failures, failureSignature(tool, text ?? '')) : recordSuccess(mem.failures, tool);
@@ -425,6 +504,8 @@ function hostOf($: EngineInterface): HookHost {
 }
 
 const RECENT_PANE = 'tiergear-recent';
+const TIER_PICKER = 'tiergear-tier';
+const PAUSE_BUTTON = 'tiergear-pause';
 const RECENT_TITLE = 'tiergear: recent decisions';
 const RECENT_MAX = 50;
 
@@ -441,24 +522,44 @@ export const register: Register = (on: On, options: PluginOptions) => {
     return { text: 'Recent decisions opened.' };
   });
 
-  // The status line itself cannot be pressed, so the band above the prompt repeats it with a button.
+  // The status line itself cannot be pressed, so the band above the prompt repeats it with the controls.
   on('ui.render', { component: 'AbovePrompt' }, async ($, e, next) => {
     const below = await next(e);
     if (e.props.hasSurvey) return below;
     const session = await $.session.id().catch(() => null);
-    const line = session === null ? null : tiergear.statusLine(session);
-    if (line === null) return below;
-    const { Box, Text, Button } = $.ui.resolve(e);
-    const text = Text({ dimColor: true, children: line });
-    const button = Button({
-      label: 'Recent',
-      onPress: async () => {
-        if ((await $.ui.panes()).some((pane) => pane.id === RECENT_PANE)) await $.ui.close({ id: RECENT_PANE });
-        else await $.ui.open({ id: RECENT_PANE, title: RECENT_TITLE });
-      },
-    });
-    const ours = Box({ flexDirection: 'row', gap: 1, children: tiergear.config.showRecentButton ? [text, button] : [text] });
-    return Box({ flexDirection: 'column', children: [below, ours] });
+    if (session === null) return below;
+    const { tier, paused } = await tiergear.controls(hostOf($));
+    const table = $.ui.resolve(e);
+    const { Box, Text, Button } = table;
+    const parts = [Text({ dimColor: true, children: tiergear.statusLine(session) ?? 'tiergear' })];
+    // The mobile app draws no picker.
+    if ('Select' in table) {
+      parts.push(
+        table.Select({
+          key: TIER_PICKER,
+          label: 'Tier:',
+          options: TIER_ORDER.map((value) => ({ value })),
+          // Paused, no tier is in effect, so none is shown picked.
+          ...(tier !== null && !paused ? { value: tier } : {}),
+          onSelect: async (value) => {
+            if (isTier(value)) await tiergear.pick(hostOf($), value);
+          },
+        }),
+      );
+    }
+    parts.push(Button({ key: PAUSE_BUTTON, label: paused ? 'Resume' : 'Pause', onPress: () => tiergear.togglePause(hostOf($)) }));
+    if (tiergear.config.showRecentButton) {
+      parts.push(
+        Button({
+          label: 'Recent',
+          onPress: async () => {
+            if ((await $.ui.panes()).some((pane) => pane.id === RECENT_PANE)) await $.ui.close({ id: RECENT_PANE });
+            else await $.ui.open({ id: RECENT_PANE, title: RECENT_TITLE });
+          },
+        }),
+      );
+    }
+    return Box({ flexDirection: 'column', children: [below, Box({ flexDirection: 'row', gap: 1, children: parts })] });
   });
 
   on('ui.render', { component: 'Pane', requestId: RECENT_PANE }, async ($, e) => {

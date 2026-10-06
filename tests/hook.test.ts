@@ -3,6 +3,7 @@ import { createTiergear, stepOverride, type HookHost } from '../hooks/tiergear.t
 import { RECORD_TTL_MS } from '../src/core/decide.js';
 import { floorPath, serializeFloor } from '../src/core/floor.js';
 import { abridge } from '../src/core/state.js';
+import { parseStatus, statusPath } from '../src/core/status.js';
 import { tablesPath } from '../src/core/tables.js';
 
 type Reply = { tier?: [string, number]; stuck?: number } | 'fail' | 'down';
@@ -156,12 +157,13 @@ describe('promptSubmit', () => {
     expect(down.logs.some((l) => l.includes('ECONNREFUSED'))).toBe(true);
   });
 
-  it('pins on !pin, passing the rest of the prompt', async () => {
-    const { host } = fakeHost([{ tier: ['standard', 0.8] }]);
+  it('passes a prompt starting with !pin to the model as typed and keeps judging', async () => {
+    const { host, requests } = fakeHost([{ tier: ['deep', 0.8] }, { tier: ['deep', 0.8], stuck: 0 }]);
     const tiergear = createTiergear({});
     await tiergear.promptSubmit(host, typed('do it'));
-    expect(await tiergear.promptSubmit(host, typed('!pin keep going'))).toBe('keep going');
-    expect(await tiergear.promptSubmit(host, typed('!pin'))).toBe('!pin');
+    expect(await tiergear.promptSubmit(host, typed('!pin keep going'))).toBe('!pin keep going');
+    expect(requests).toHaveLength(2);
+    expect(tiergear.applied('s1')).toEqual({ model: 'opus', effort: 'xhigh' });
   });
 
   it('restores the applied target in a fresh process from the stored record', async () => {
@@ -315,7 +317,7 @@ describe('status line', () => {
     await tiergear.step(host, engineStep('t1'));
     // Built by hand: engineStep's default would turn an undefined effort into medium.
     await tiergear.step(host, { turnId: 't2', index: 0, model: 'claude-haiku-4-5', messageCount: 1 });
-    expect(tiergear.statusLine('s1')).toBe('tiergear · deep 0.80 · haiku/- · unchanged (pinned)');
+    expect(tiergear.statusLine('s1')).toBe('tiergear · deep n/d · haiku/- · unchanged (paused)');
   });
 });
 
@@ -415,12 +417,12 @@ describe('recent decisions', () => {
 });
 
 describe('user control wins (R18)', () => {
-  it('keeps no first prompt for a pinned session, which never asks the judge again', async () => {
-    const pinned = fakeHost([{ tier: ['deep', 0.8] }]);
+  it('keeps no first prompt for a paused session, which asks the judge nothing until resumed', async () => {
+    const paused = fakeHost([{ tier: ['deep', 0.8] }]);
     const a = createTiergear({});
-    await a.promptSubmit(pinned.host, typed('refactor the parser'));
-    await a.promptSubmit(pinned.host, typed('!pin keep going'));
-    expect(pinned.store.get('session:s1')).toMatchObject({ pinned: true, firstPrompt: '' });
+    await a.promptSubmit(paused.host, typed('refactor the parser'));
+    await a.togglePause(paused.host);
+    expect(paused.store.get('session:s1')).toMatchObject({ pinned: true, firstPrompt: '' });
 
     const manual = fakeHost([{ tier: ['deep', 0.8] }]);
     const b = createTiergear({});
@@ -430,19 +432,19 @@ describe('user control wins (R18)', () => {
     expect(manual.store.get('session:s1')).toMatchObject({ pinned: true, firstPrompt: '' });
   });
 
-  it('clears applied on !pin so the session runs on its own model and effort', async () => {
+  it('clears applied on Pause so the session runs on its own model and effort', async () => {
     const { host, store } = fakeHost([{ tier: ['deep', 0.8] }]);
     const tiergear = createTiergear({});
     await tiergear.promptSubmit(host, typed('refactor the parser'));
-    await tiergear.promptSubmit(host, typed('!pin keep going'));
+    await tiergear.togglePause(host);
     expect(tiergear.applied('s1')).toBeNull();
     expect(store.get('session:s1')).toMatchObject({ pinned: true, applied: null });
-    expect(tiergear.statusLine('s1')).toContain('unchanged (pinned)');
+    expect(tiergear.statusLine('s1')).toContain('unchanged (paused)');
     const step = engineStep('t1');
     expect(await tiergear.step(host, step)).toBe(step);
   });
 
-  it('treats a manual model change between turns as a pin', async () => {
+  it('treats a manual model change between turns as a pause', async () => {
     const { host, store, logs, requests } = fakeHost([{ tier: ['deep', 0.8] }]);
     const tiergear = createTiergear({});
     await tiergear.promptSubmit(host, typed('refactor the parser'));
@@ -464,7 +466,7 @@ describe('user control wins (R18)', () => {
     expect(tiergear.applied('s1')).toBeNull();
   });
 
-  it('treats a manual effort change as a pin, but not a change inside one turn', async () => {
+  it('treats a manual effort change as a pause, but not a change inside one turn', async () => {
     const { host, store } = fakeHost([{ tier: ['standard', 0.8] }]);
     const tiergear = createTiergear({});
     await tiergear.promptSubmit(host, typed('fix the test'));
@@ -474,6 +476,109 @@ describe('user control wins (R18)', () => {
     expect(store.get('session:s1')).toMatchObject({ pinned: false });
     await tiergear.step(host, engineStep('t2', 'claude-sonnet-5-5', 'high'));
     expect(store.get('session:s1')).toMatchObject({ pinned: true, applied: null });
+  });
+});
+
+describe('band controls', () => {
+  it('applies a picked tier from the next request, even inside a running turn, and the judge carries on from it', async () => {
+    const { host, requests } = fakeHost([{ tier: ['deep', 0.8] }, { tier: ['quick', 0.6], stuck: 0 }]);
+    const tiergear = createTiergear({});
+    await tiergear.promptSubmit(host, typed('refactor the parser'));
+    await tiergear.step(host, engineStep('t1'));
+    await tiergear.pick(host, 'quick');
+    expect(await tiergear.step(host, engineStep('t1', 'claude-sonnet-5-5', 'medium', 1))).toMatchObject({ model: 'claude-opus-5-5', effort: 'low' });
+    expect(tiergear.statusLine('s1')).toBe('tiergear · quick n/d → opus/low');
+    expect(await tiergear.controls(host)).toEqual({ tier: 'quick', paused: false });
+    expect((await tiergear.recent(host, 1))[0]).toContain('manual → set quick (manual tier) · opus/low');
+    await tiergear.promptSubmit(host, typed('next'));
+    expect(requests).toHaveLength(2);
+  });
+
+  it('uses a tier picked before the first prompt for that turn, then asks the judge', async () => {
+    const { host, store, requests } = fakeHost([{ tier: ['trivial', 0.9], stuck: 0 }]);
+    const tiergear = createTiergear({});
+    expect(await tiergear.controls(host)).toEqual({ tier: null, paused: false });
+    await tiergear.pick(host, 'deep');
+    expect(tiergear.applied('s1')).toEqual({ model: 'opus', effort: 'xhigh' });
+    await tiergear.promptSubmit(host, typed('refactor the parser'));
+    expect(requests).toHaveLength(0);
+    expect(tiergear.applied('s1')).toEqual({ model: 'opus', effort: 'xhigh' });
+    expect(store.get('session:s1')).toMatchObject({ started: true, firstPrompt: 'refactor the parser', tier: 'deep' });
+    await tiergear.promptSubmit(host, typed('ok'));
+    expect(requests).toHaveLength(1);
+  });
+
+  it('keeps the launch ceiling under a tier picked before the first prompt', async () => {
+    const files = { [floorPath('/home/u', '/w/task')]: serializeFloor({ worktree: '/w/task', tier: 'standard', createdAt: 1_800_000_000_000, ceiling: 'deep' }) };
+    const { host, store } = fakeHost([{ tier: ['max', 0.9], stuck: 0 }], files);
+    const tiergear = createTiergear({});
+    await tiergear.pick(host, 'quick');
+    await tiergear.promptSubmit(host, typed('go'));
+    expect(store.get('session:s1')).toMatchObject({ tier: 'quick', floor: 'quick', ceiling: 'deep' });
+    await tiergear.promptSubmit(host, typed('now the hard part'));
+    expect(store.get('session:s1')).toMatchObject({ tier: 'deep' });
+  });
+
+  it('pauses and resumes, the judge back on the next prompt with that prompt as the task', async () => {
+    const { host, requests } = fakeHost([{ tier: ['deep', 0.8] }, { tier: ['deep', 0.8], stuck: 0 }]);
+    const tiergear = createTiergear({});
+    await tiergear.promptSubmit(host, typed('refactor the parser'));
+    await tiergear.togglePause(host);
+    expect(await tiergear.controls(host)).toEqual({ tier: 'deep', paused: true });
+    await tiergear.promptSubmit(host, typed('keep going'));
+    expect(requests).toHaveLength(1);
+    await tiergear.togglePause(host);
+    expect(await tiergear.controls(host)).toEqual({ tier: 'deep', paused: false });
+    expect(tiergear.applied('s1')).toEqual({ model: 'opus', effort: 'xhigh' });
+    await tiergear.promptSubmit(host, typed('now the tests'));
+    expect(requests).toHaveLength(2);
+    expect(JSON.parse(requests[1]!.body).state.task).toBe('now the tests');
+    const lines = await tiergear.recent(host, 4);
+    expect(lines[1]).toContain('manual → set deep (resumed)');
+    expect(lines[3]).toContain('manual → hold deep (paused) · session');
+  });
+
+  it("resumes after a manual change on the session's own model, its effort from the tier", async () => {
+    const { host } = fakeHost([{ tier: ['deep', 0.8] }]);
+    const tiergear = createTiergear({});
+    await tiergear.promptSubmit(host, typed('refactor the parser'));
+    await tiergear.step(host, engineStep('t1'));
+    await tiergear.step(host, engineStep('t2', 'claude-sonnet-5-5', 'high'));
+    expect(await tiergear.controls(host)).toEqual({ tier: 'deep', paused: true });
+    await tiergear.togglePause(host);
+    expect(tiergear.applied('s1')).toEqual({ model: 'sonnet', effort: 'high' });
+  });
+
+  it('reads the controls of a session from the store after a reload', async () => {
+    const { host } = fakeHost([{ tier: ['deep', 0.8] }]);
+    await createTiergear({}).promptSubmit(host, typed('refactor the parser'));
+    const reloaded = createTiergear({});
+    expect(await reloaded.controls(host)).toEqual({ tier: 'deep', paused: false });
+    await reloaded.togglePause(host);
+    expect(await reloaded.controls(host)).toEqual({ tier: 'deep', paused: true });
+  });
+});
+
+describe('status for status-line tools', () => {
+  it('writes what the band shows, and rewrites it when the engine reports its values', async () => {
+    const { host, files } = fakeHost([{ tier: ['deep', 0.3] }]);
+    const tiergear = createTiergear({});
+    await tiergear.promptSubmit(host, typed('look around'));
+    const path = statusPath('/home/u', 's1');
+    expect(parseStatus(files[path]!)).toMatchObject({ session: 's1', tier: null, model: null, effort: null, paused: false, reason: 'low confidence' });
+    await tiergear.step(host, engineStep('t1'));
+    expect(parseStatus(files[path]!)).toMatchObject({ model: 'sonnet', effort: 'medium', line: 'tiergear · unset 0.30 · sonnet/medium · unchanged (low confidence)' });
+  });
+
+  it('writes the applied model and effort, and the pause', async () => {
+    const { host, files } = fakeHost([{ tier: ['deep', 0.8] }]);
+    const tiergear = createTiergear({});
+    await tiergear.promptSubmit(host, typed('refactor the parser'));
+    const path = statusPath('/home/u', 's1');
+    expect(parseStatus(files[path]!)).toMatchObject({ tier: 'deep', model: 'opus', effort: 'xhigh', paused: false, line: 'tiergear · deep 0.80 → opus/xhigh' });
+    await tiergear.step(host, engineStep('t1'));
+    await tiergear.togglePause(host);
+    expect(parseStatus(files[path]!)).toMatchObject({ tier: 'deep', model: 'sonnet', effort: 'medium', paused: true });
   });
 });
 

@@ -5,12 +5,13 @@ import {
   canAskJudge,
   decideFirstTurn,
   decideNextTurn,
-  isPinPrompt,
+  decidePause,
+  decidePick,
+  decideResume,
   newRecord,
   noteJudgeOutcome,
   parseRecord,
   statusText,
-  stripPin,
   type SessionRecord,
 } from '../src/core/decide.js';
 import type { Verdict } from '../src/core/judge.js';
@@ -32,16 +33,6 @@ function at(tier: Tier, extra: Partial<SessionRecord> = {}): SessionRecord {
 
 const next = (record: SessionRecord, v: Verdict | null, repeatedFailures = 0, c: Config = config, sessionModel: string | null = null) =>
   decideNextTurn({ record, verdict: v, repeatedFailures, sessionModel, config: c, tables });
-
-describe('pin', () => {
-  it('detects and strips !pin, keeping the text when nothing is left', () => {
-    expect(isPinPrompt('!pin fix it')).toBe(true);
-    expect(isPinPrompt('  !pin')).toBe(true);
-    expect(isPinPrompt('!pinned')).toBe(false);
-    expect(stripPin('!pin fix it')).toBe('fix it');
-    expect(stripPin('!pin')).toBe('!pin');
-  });
-});
 
 describe('decideFirstTurn', () => {
   const first = (v: Verdict | null, extra: Partial<Parameters<typeof decideFirstTurn>[0]> = {}) =>
@@ -183,8 +174,84 @@ describe('decideNextTurn', () => {
   it('holds a pinned session and clears applied, so its own model and effort rule', () => {
     const d = next(at('quick', { pinned: true }), verdict('max'), 5);
     expect(d.change).toBe('hold');
-    expect(d.reason).toBe('pinned');
+    expect(d.reason).toBe('paused');
     expect(d.record.applied).toBeNull();
+  });
+});
+
+describe('manual controls', () => {
+  const pick = (record: SessionRecord, tier: Tier, sessionModel: string | null = null, c: Config = config) =>
+    decidePick({ record, tier, sessionModel, config: c, tables });
+  const firstTurn = (v: Verdict | null, extra: Partial<Parameters<typeof decideFirstTurn>[0]> = {}) =>
+    decideFirstTurn({ record: newRecord('t', now), floor: null, verdict: v, config, tables, ...extra });
+  const unprompted = (extra: Partial<SessionRecord> = {}): SessionRecord => ({ ...newRecord('', now), started: false, ...extra });
+
+  it('starts from a picked tier mid-session, holding the model and taking its effort', () => {
+    const d = pick(at('deep', { floor: 'standard', model: 'opus', applied: { model: 'opus', effort: 'xhigh' } }), 'quick');
+    expect(d).toMatchObject({ change: 'set', reason: 'manual tier', confidence: null });
+    expect(d.record).toMatchObject({ tier: 'quick', model: 'opus', applied: { model: 'opus', effort: 'low' }, pinned: false, downStreak: 0 });
+  });
+
+  it('lowers the floor to a pick below it and keeps it otherwise', () => {
+    expect(pick(at('deep', { floor: 'standard' }), 'trivial').record.floor).toBe('trivial');
+    expect(pick(at('deep', { floor: 'standard' }), 'max').record.floor).toBe('standard');
+    expect(pick(at('deep', { floor: null }), 'deep').record.floor).toBe('standard');
+  });
+
+  it('lets a pick pass the launch ceiling, while the judge stays capped', () => {
+    const picked = pick(at('quick', { ceiling: 'standard' }), 'deep');
+    expect(picked.record).toMatchObject({ tier: 'deep', ceiling: 'standard' });
+    const later = next(picked.record, verdict('max', 0.9));
+    expect(later.change).toBe('hold');
+    expect(later.reason).toBe('at ceiling');
+    expect(later.record.tier).toBe('deep');
+  });
+
+  it('switches the model too when switchModelMidSession is on', () => {
+    expect(pick(at('quick'), 'deep', null, { ...config, switchModelMidSession: true }).record.applied).toEqual({ model: 'opus', effort: 'xhigh' });
+  });
+
+  it("unpauses on a pick and holds the session's own model, not the one it was held on before", () => {
+    const paused = at('deep', { pinned: true, applied: null, model: 'sonnet' });
+    const d = pick(paused, 'deep', 'opus');
+    expect(d.record).toMatchObject({ pinned: false, model: 'opus', applied: { model: 'opus', effort: 'xhigh' } });
+  });
+
+  it('starts a pick made before the first prompt on table A, as the first turn would', () => {
+    const d = pick(unprompted(), 'deep');
+    expect(d.record).toMatchObject({ tier: 'deep', floor: 'standard', model: 'opus', applied: { model: 'opus', effort: 'xhigh' }, started: false });
+  });
+
+  it('keeps a pick made before the first prompt for that turn, without the judge', () => {
+    const picked = pick(unprompted(), 'deep').record;
+    const d = firstTurn(verdict('trivial', 0.99), { record: picked });
+    expect(d).toMatchObject({ change: 'hold', reason: 'manual tier', confidence: null });
+    expect(d.record).toMatchObject({ tier: 'deep', applied: { model: 'opus', effort: 'xhigh' } });
+  });
+
+  it('keeps the launch bounds under a pick made before the first prompt', () => {
+    const launch = { worktree: '/w', tier: 'standard' as const, createdAt: now, ceiling: 'deep' as const };
+    expect(firstTurn(null, { record: pick(unprompted(), 'quick').record, floor: launch }).record).toMatchObject({ tier: 'quick', floor: 'quick', ceiling: 'deep' });
+    expect(firstTurn(null, { record: pick(unprompted(), 'max').record, floor: launch }).record).toMatchObject({ tier: 'max', floor: 'standard', ceiling: 'deep' });
+  });
+
+  it('pauses: nothing applied, the session on its own model and effort', () => {
+    const d = decidePause(at('deep', { downStreak: 1 }));
+    expect(d).toMatchObject({ change: 'hold', reason: 'paused', confidence: null });
+    expect(d.record).toMatchObject({ pinned: true, applied: null, downStreak: 0, tier: 'deep' });
+  });
+
+  it("resumes at the tier it had, on the session's own model", () => {
+    const paused = decidePause(at('deep', { model: 'sonnet' })).record;
+    const d = decideResume({ record: paused, sessionModel: 'opus', config, tables });
+    expect(d).toMatchObject({ change: 'set', reason: 'resumed' });
+    expect(d.record).toMatchObject({ pinned: false, tier: 'deep', model: 'opus', applied: { model: 'opus', effort: 'xhigh' } });
+  });
+
+  it('resumes with nothing applied when no tier was decided yet', () => {
+    const d = decideResume({ record: decidePause(newRecord('t', now)).record, sessionModel: null, config, tables });
+    expect(d).toMatchObject({ change: 'hold', reason: 'resumed' });
+    expect(d.record).toMatchObject({ pinned: false, applied: null });
   });
 });
 
@@ -207,6 +274,13 @@ describe('records and status', () => {
     expect(parseRecord(JSON.parse(JSON.stringify(r)))).toEqual(r);
     expect(parseRecord({ tier: 'huge' })).toBeNull();
     expect(parseRecord(null)).toBeNull();
+  });
+
+  it('reads a record stored before the first-prompt mark as started', () => {
+    const { started: _, ...old } = at('quick');
+    expect(parseRecord(JSON.parse(JSON.stringify(old)))?.started).toBe(true);
+    const unprompted = { ...newRecord('', now), started: false };
+    expect(parseRecord(JSON.parse(JSON.stringify(unprompted)))?.started).toBe(false);
   });
 
   it('round-trips a ceiling and reads a record stored before ceilings as having none', () => {

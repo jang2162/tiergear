@@ -22,7 +22,10 @@ export interface SessionRecord {
   // What turn.step writes on main-loop requests.
   applied: Applied | null;
   downStreak: number;
+  // Paused ([ Pause ] or a manual /model, /effort): nothing is applied and the judge is not asked.
   pinned: boolean;
+  // False only for a record a control made before the session's first prompt.
+  started: boolean;
   judgeFailures: number;
   judgePausedUntil: number;
   updatedAt: number;
@@ -44,17 +47,6 @@ export const RECORD_TTL_MS = 7 * 24 * 60 * 60_000;
 export const MAX_RECORDS = 200;
 export const FIRST_PROMPT_CHARS = 2000;
 
-const PIN = /^\s*!pin\b\s*/;
-
-export function isPinPrompt(text: string): boolean {
-  return PIN.test(text);
-}
-
-export function stripPin(text: string): string {
-  const stripped = text.replace(PIN, '');
-  return stripped.length > 0 ? stripped : text;
-}
-
 export function newRecord(firstPrompt: string, now: number): SessionRecord {
   return {
     // The judge only ever sees this many characters of it.
@@ -66,6 +58,7 @@ export function newRecord(firstPrompt: string, now: number): SessionRecord {
     applied: null,
     downStreak: 0,
     pinned: false,
+    started: true,
     judgeFailures: 0,
     judgePausedUntil: 0,
     updatedAt: now,
@@ -101,6 +94,8 @@ export function parseRecord(value: unknown): SessionRecord | null {
     applied: readApplied(r['applied']),
     downStreak: count(r['downStreak']),
     pinned: r['pinned'] === true,
+    // Records stored before this mark were all made by a prompt.
+    started: r['started'] !== false,
     judgeFailures: count(r['judgeFailures']),
     judgePausedUntil: count(r['judgePausedUntil']),
     updatedAt: r['updatedAt'],
@@ -122,9 +117,48 @@ function appliedFor(model: string | null, tier: Tier, config: Config, tables: Ta
   return model ? { model, effort } : { effort };
 }
 
-// A pinned session runs on its own model and effort: nothing is applied.
-function pinnedHold(record: SessionRecord, confidence: number | null): Decision {
-  return { record: { ...record, applied: null, downStreak: 0 }, change: 'hold', confidence, reason: 'pinned' };
+// A paused session runs on its own model and effort: nothing is applied.
+function pausedHold(record: SessionRecord, confidence: number | null): Decision {
+  return { record: { ...record, pinned: true, applied: null, downStreak: 0 }, change: 'hold', confidence, reason: 'paused' };
+}
+
+// Paused, tiergear's held model is not in effect: the session's own is.
+function heldModel(record: SessionRecord, sessionModel: string | null): string | null {
+  return record.pinned ? (sessionModel ?? record.model) : (record.model ?? sessionModel);
+}
+
+// Before the first prompt there is no cache to lose, so the model follows the tier as on a first turn.
+function appliedForTier(record: SessionRecord, model: string | null, tier: Tier, config: Config, tables: Tables): Applied {
+  if (record.started) return appliedFor(model, tier, config, tables);
+  const target = firstTarget(tables, 'claude', tier);
+  return { model: target.model, effort: target.effort };
+}
+
+export function decidePause(record: SessionRecord): Decision {
+  return pausedHold(record, null);
+}
+
+/** A tier picked by hand: a starting point the judge keeps moving by the usual rules. */
+export function decidePick(input: { record: SessionRecord; tier: Tier; sessionModel: string | null; config: Config; tables: Tables }): Decision {
+  const { record, tier, config, tables } = input;
+  const model = heldModel(record, input.sessionModel);
+  const applied = appliedForTier(record, model, tier, config, tables);
+  const floor = record.floor === null ? stepDown(tier) : tierRank(tier) < tierRank(record.floor) ? tier : record.floor;
+  return {
+    record: { ...record, tier, floor, pinned: false, applied, model: applied.model ?? model, downStreak: 0 },
+    change: 'set',
+    confidence: null,
+    reason: 'manual tier',
+  };
+}
+
+export function decideResume(input: { record: SessionRecord; sessionModel: string | null; config: Config; tables: Tables }): Decision {
+  const { record, config, tables } = input;
+  const resumed: SessionRecord = { ...record, pinned: false, downStreak: 0 };
+  if (record.tier === null) return { record: { ...resumed, applied: null }, change: 'hold', confidence: null, reason: 'resumed' };
+  const model = heldModel(record, input.sessionModel);
+  const applied = appliedForTier(record, model, record.tier, config, tables);
+  return { record: { ...resumed, applied, model: applied.model ?? model }, change: 'set', confidence: null, reason: 'resumed' };
 }
 
 export function decideFirstTurn(input: {
@@ -135,7 +169,12 @@ export function decideFirstTurn(input: {
   tables: Tables;
 }): Decision {
   const { record, floor, verdict, config, tables } = input;
-  if (record.pinned) return pinnedHold(record, null);
+  if (record.pinned) return pausedHold(record, null);
+  if (!record.started && record.tier !== null) {
+    // Picked before the first prompt: the pick stands for this turn, and a launch still bounds the session.
+    const launched = floor ? { floor: tierRank(floor.tier) < tierRank(record.tier) ? floor.tier : record.tier, ceiling: floor.ceiling ?? null } : {};
+    return { record: { ...record, ...launched }, change: 'hold', confidence: null, reason: 'manual tier' };
+  }
   if (floor) {
     const target = firstTarget(tables, 'claude', floor.tier);
     return {
@@ -185,7 +224,7 @@ export function decideNextTurn(input: {
     return { record: { ...record, tier, applied, model: applied.model ?? model, downStreak: 0 }, change, confidence, reason };
   };
 
-  if (record.pinned) return pinnedHold(record, confidence);
+  if (record.pinned) return pausedHold(record, confidence);
 
   if (record.tier === null) {
     if (!answer || answer.confidence < config.minUpgradeConfidence) return hold(answer ? 'low confidence' : 'no answer');

@@ -5,7 +5,8 @@ export interface LogEntry {
   at: number;
   source: 'hook' | 'cli';
   session: string;
-  phase: 'first' | 'next' | 'launch';
+  // manual: a tier picked, a pause or a resume from the band.
+  phase: 'first' | 'next' | 'launch' | 'manual';
   judge: string;
   tier: Tier | null;
   change: Change;
@@ -68,6 +69,7 @@ export function recentDecisionLines(text: string, limit: number, time: (at: numb
     .reverse()
     .map((e) => {
       const ran = e.applied ? appliedText(e.applied) : 'session';
-      return `${time(e.at)}  judge ${judgeText(e)} → ${e.change} ${e.tier ?? 'unset'} (${e.reason}) · ${ran}`;
+      const who = e.phase === 'manual' ? 'manual' : `judge ${judgeText(e)}`;
+      return `${time(e.at)}  ${who} → ${e.change} ${e.tier ?? 'unset'} (${e.reason}) · ${ran}`;
     });
 }

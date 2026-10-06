@@ -49,6 +49,11 @@ describe('recentDecisionLines', () => {
     ]);
   });
 
+  it('shows what was done by hand as manual', () => {
+    const text = entry({ at: 1, phase: 'manual', outcome: 'skipped', proposed: null, confidence: null, change: 'set', tier: 'quick', reason: 'manual tier', applied: { model: 'opus', effort: 'low' } });
+    expect(recentDecisionLines(text, 10, time)).toEqual(['t1  manual → set quick (manual tier) · opus/low']);
+  });
+
   it('marks an older entry that did not record the proposal', () => {
     const old = JSON.parse(entry({ applied: { effort: 'low' } })) as Record<string, unknown>;
     delete old['proposed'];

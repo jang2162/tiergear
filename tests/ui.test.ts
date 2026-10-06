@@ -16,7 +16,7 @@ function load(options: Record<string, unknown> = {}) {
     hooks.find((h) => h.event === event && Object.entries(match).every(([k, v]) => h.matcher?.[k] === v))!.hook;
 }
 
-function fakeDollar() {
+function fakeDollar(surface: 'terminal' | 'mobile' = 'terminal') {
   const files: Record<string, string> = {};
   const store = new Map<string, unknown>();
   const opened: unknown[] = [];
@@ -58,7 +58,10 @@ function fakeDollar() {
         panes.splice(panes.findIndex((p) => p.id === pane.id), 1);
       },
       panes: async () => [...panes],
-      resolve: () => ({ Box: element('Box'), Text: element('Text'), Button: element('Button') }),
+      resolve: () =>
+        surface === 'mobile'
+          ? { Box: element('Box'), Text: element('Text'), Button: element('Button') }
+          : { Box: element('Box'), Text: element('Text'), Button: element('Button'), Select: element('Select') },
     },
     command: { register: async () => {} },
   };
@@ -68,38 +71,79 @@ function fakeDollar() {
 const band = (hasSurvey = false) => ({ component: 'AbovePrompt', surface: 'terminal', props: { hasSurvey } });
 const below = async () => 'BELOW';
 
+// The band's own row: the line, then the controls.
+async function row(hook: (event: string, match?: Record<string, unknown>) => Hook, $: unknown): Promise<Element[]> {
+  const tree = (await hook('ui.render', { component: 'AbovePrompt' })($, band(), below)) as Element;
+  const [kept, ours] = tree.props.children as [string, Element];
+  expect(kept).toBe('BELOW');
+  return [ours.props.children].flat() as Element[];
+}
+
+const labelled = (parts: Element[], label: string) => parts.find((p) => p.props.label === label)!;
+
 async function decide(hook: (event: string, match?: Record<string, unknown>) => Hook, $: unknown) {
   await hook('prompt.submit')($, { text: 'refactor the parser', origin: { kind: 'composer' } }, async (e: unknown) => e);
 }
 
 describe('band above the prompt', () => {
-  it('draws nothing of its own before the first decision', async () => {
+  it('offers the controls before the first prompt, with no tier picked yet', async () => {
     const hook = load();
     const { $ } = fakeDollar();
-    expect(await hook('ui.render', { component: 'AbovePrompt' })($, band(), below)).toBe('BELOW');
+    const parts = await row(hook, $);
+    expect(parts.map((p) => p.type)).toEqual(['Text', 'Select', 'Button', 'Button']);
+    expect(parts[0]!.props.children).toBe('tiergear');
+    expect(parts[1]!.props).toMatchObject({ label: 'Tier:', options: ['trivial', 'quick', 'standard', 'deep', 'max'].map((value) => ({ value })) });
+    expect('value' in parts[1]!.props).toBe(false);
+    expect(parts.map((p) => p.props.label)).toEqual([undefined, 'Tier:', 'Pause', 'Recent']);
   });
 
-  it('repeats the status line with a Recent button that opens the pane', async () => {
+  it('repeats the status line with the tier picker, Pause and a Recent button that opens the pane', async () => {
     const hook = load();
     const { $, opened } = fakeDollar();
     await decide(hook, $);
-    const tree = (await hook('ui.render', { component: 'AbovePrompt' })($, band(), below)) as Element;
-    const [kept, ours] = tree.props.children as [string, Element];
-    expect(kept).toBe('BELOW');
-    const [text, button] = ours.props.children as [Element, Element];
-    expect(text.props.children).toBe('tiergear · deep 0.80 → opus/xhigh');
-    expect(button.props.label).toBe('Recent');
-    await (button.props.onPress as () => Promise<void>)();
+    const parts = await row(hook, $);
+    expect(parts[0]!.props.children).toBe('tiergear · deep 0.80 → opus/xhigh');
+    expect(parts[1]!.props.value).toBe('deep');
+    await (labelled(parts, 'Recent').props.onPress as () => Promise<void>)();
     expect(opened).toEqual([{ id: 'tiergear-recent', title: 'tiergear: recent decisions' }]);
+  });
+
+  it('picks a tier from the band', async () => {
+    const hook = load();
+    const { $ } = fakeDollar();
+    await decide(hook, $);
+    await ((await row(hook, $))[1]!.props.onSelect as (value: string) => Promise<void>)('quick');
+    const parts = await row(hook, $);
+    expect(parts[1]!.props.value).toBe('quick');
+    expect(parts[0]!.props.children).toBe('tiergear · quick n/d → opus/low');
+  });
+
+  it('pauses and resumes from the band, the picker empty while paused', async () => {
+    const hook = load();
+    const { $ } = fakeDollar();
+    await decide(hook, $);
+    await (labelled(await row(hook, $), 'Pause').props.onPress as () => Promise<void>)();
+    const paused = await row(hook, $);
+    expect('value' in paused[1]!.props).toBe(false);
+    expect(paused[0]!.props.children).toContain('unchanged (paused)');
+    await (labelled(paused, 'Resume').props.onPress as () => Promise<void>)();
+    const resumed = await row(hook, $);
+    expect(resumed[1]!.props.value).toBe('deep');
+    expect(labelled(resumed, 'Pause')).toBeDefined();
+  });
+
+  it('leaves the picker out on a surface that draws none', async () => {
+    const hook = load();
+    const { $ } = fakeDollar('mobile');
+    await decide(hook, $);
+    expect((await row(hook, $)).map((p) => p.props.label)).toEqual([undefined, 'Pause', 'Recent']);
   });
 
   it('closes the pane on the next press, and opens it again after that', async () => {
     const hook = load();
     const { $, opened, closed } = fakeDollar();
     await decide(hook, $);
-    const tree = (await hook('ui.render', { component: 'AbovePrompt' })($, band(), below)) as Element;
-    const button = ((tree.props.children as [string, Element])[1].props.children as Element[])[1]!;
-    const press = button.props.onPress as () => Promise<void>;
+    const press = labelled(await row(hook, $), 'Recent').props.onPress as () => Promise<void>;
     await press();
     await press();
     expect(closed).toEqual([{ id: 'tiergear-recent' }]);
@@ -107,14 +151,12 @@ describe('band above the prompt', () => {
     expect(opened).toHaveLength(2);
   });
 
-  it('shows the line alone when the button is turned off', async () => {
+  it('leaves the Recent button out when it is turned off', async () => {
     const hook = load({ showRecentButton: false });
     const { $ } = fakeDollar();
     await decide(hook, $);
-    const tree = (await hook('ui.render', { component: 'AbovePrompt' })($, band(), below)) as Element;
-    const ours = (tree.props.children as [string, Element])[1];
-    const parts = [ours.props.children].flat() as Element[];
-    expect(parts.map((p) => p.type)).toEqual(['Text']);
+    const parts = await row(hook, $);
+    expect(parts.map((p) => p.props.label)).toEqual([undefined, 'Tier:', 'Pause']);
     expect(parts[0]!.props.children).toBe('tiergear · deep 0.80 → opus/xhigh');
   });
 
