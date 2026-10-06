@@ -1,0 +1,75 @@
+{
+  "id": "f623a5bd-c95f-4443-aacc-84185dc7cd69",
+  "ok": true,
+  "result": {
+    "worktree": {
+      "id": "8db22c76-2921-46d5-a9c5-efd9d698eaf4::/Users/jang2162/IdeaProjects/tiergear/.worktrees/tiergear/tiergear-probe",
+      "identity": {
+        "key": "wt2:local:1f575190-b26f-4170-9e32-ac3709e8b960",
+        "executionHostId": "local",
+        "instanceId": "1f575190-b26f-4170-9e32-ac3709e8b960"
+      },
+      "instanceId": "1f575190-b26f-4170-9e32-ac3709e8b960",
+      "repoId": "8db22c76-2921-46d5-a9c5-efd9d698eaf4",
+      "projectId": "github:jang2162/tiergear",
+      "hostId": "local",
+      "projectHostSetupId": "8db22c76-2921-46d5-a9c5-efd9d698eaf4",
+      "creatorProvenance": {
+        "kind": "host"
+      },
+      "path": "/Users/jang2162/IdeaProjects/tiergear/.worktrees/tiergear/tiergear-probe",
+      "head": "42f2de682120b9350a3d5c32efee87660f287cf3",
+      "branch": "refs/heads/jang2162/tiergear-probe",
+      "isBare": false,
+      "isMainWorktree": false,
+      "displayName": "tiergear-probe",
+      "displayNameMode": "fixed",
+      "comment": "",
+      "linkedIssue": null,
+      "linkedPR": null,
+      "linkedLinearIssue": null,
+      "linkedLinearIssueWorkspaceId": null,
+      "linkedLinearIssueOrganizationUrlKey": null,
+      "linkedGitLabMR": null,
+      "linkedGitLabIssue": null,
+      "linkedBitbucketPR": null,
+      "linkedAzureDevOpsPR": null,
+      "linkedGiteaPR": null,
+      "linkedWorkItem": null,
+      "linkedTaskSourceContext": null,
+      "isArchived": false,
+      "isUnread": false,
+      "isPinned": false,
+      "sortOrder": 1791246840757,
+      "lastActivityAt": 1791246840757,
+      "createdAt": 1791246840757,
+      "cliProvenance": {
+        "kind": "created-by-cli",
+        "createdAt": 1791246839346
+      },
+      "baseRef": "refs/remotes/origin/main",
+      "workspaceStatus": "in-progress",
+      "parentWorktreeId": null,
+      "childWorktreeIds": [],
+      "lineage": null,
+      "workspaceLineage": null,
+      "git": {
+        "path": "/Users/jang2162/IdeaProjects/tiergear/.worktrees/tiergear/tiergear-probe",
+        "head": "42f2de682120b9350a3d5c32efee87660f287cf3",
+        "branch": "refs/heads/jang2162/tiergear-probe",
+        "isBare": false,
+        "isMainWorktree": false
+      }
+    },
+    "lineage": null,
+    "workspaceLineage": null,
+    "warnings": [],
+    "catalogVersion": {
+      "epoch": "082f6714-f509-48d7-b4d2-c75ce99450c5",
+      "sequence": 499
+    }
+  },
+  "_meta": {
+    "runtimeId": "fb124fe1-5699-4e66-bc6c-a62d8d31a1a0"
+  }
+}

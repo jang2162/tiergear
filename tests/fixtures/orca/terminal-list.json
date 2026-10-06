@@ -1,0 +1,76 @@
+{
+  "id": "4fd18e9a-bf63-4846-8163-72bd0b23d096",
+  "ok": true,
+  "result": {
+    "terminals": [
+      {
+        "handle": "term_be732e8a-f7ad-428c-ae36-b127b9bdffdc",
+        "ptyId": "8db22c76-2921-46d5-a9c5-efd9d698eaf4::/Users/jang2162/IdeaProjects/tiergear/.worktrees/tiergear/tiergear-probe@@2a830277",
+        "incarnationId": "b9d26f94-f15d-4592-b442-cb42dbaa86ec",
+        "orphaned": false,
+        "worktreeId": "8db22c76-2921-46d5-a9c5-efd9d698eaf4::/Users/jang2162/IdeaProjects/tiergear/.worktrees/tiergear/tiergear-probe",
+        "worktreePath": "/Users/jang2162/IdeaProjects/tiergear/.worktrees/tiergear/tiergear-probe",
+        "branch": "",
+        "tabId": "4bdf7a03-bd5a-4668-9f87-6f32c173e366",
+        "leafId": "8c2a046d-4aa9-41e7-b7b9-362bd025e212",
+        "title": "claude",
+        "connected": true,
+        "writable": true,
+        "lastOutputAt": 1791246844520,
+        "preview": "low\nQuick safety check: Is this a project you created or one you trust? (Like your own code, a well-known open source project, or work from your team). If not, take a moment to review\nwhat's in this folder first.\nClaude Code'll be able to read, edit, and execute files here.\nSecurity guide\n❯ No, exit",
+        "executionHostId": "local",
+        "agentIdentity": "claude"
+      },
+      {
+        "handle": "term_42b24dc8-536a-4c4d-ac6b-58987d3ad305",
+        "ptyId": "8db22c76-2921-46d5-a9c5-efd9d698eaf4::/Users/jang2162/IdeaProjects/tiergear/.worktrees/tiergear/tiergear-probe@@ef0d7656",
+        "incarnationId": "eac7839d-0b41-4b27-ac3c-c81bbca158d6",
+        "orphaned": true,
+        "recordedPaneKey": "9535acc3-cb60-4b37-b4ba-2dc98423ebc5:a3b0b292-76b8-4485-a75a-db692f443e11",
+        "worktreeId": "8db22c76-2921-46d5-a9c5-efd9d698eaf4::/Users/jang2162/IdeaProjects/tiergear/.worktrees/tiergear/tiergear-probe",
+        "worktreePath": "/Users/jang2162/IdeaProjects/tiergear/.worktrees/tiergear/tiergear-probe",
+        "branch": "",
+        "tabId": "pty:8db22c76-2921-46d5-a9c5-efd9d698eaf4::/Users/jang2162/IdeaProjects/tiergear/.worktrees/tiergear/tiergear-probe@@ef0d7656",
+        "leafId": "pty:8db22c76-2921-46d5-a9c5-efd9d698eaf4::/Users/jang2162/IdeaProjects/tiergear/.worktrees/tiergear/tiergear-probe@@ef0d7656",
+        "title": "..iergear-probe",
+        "connected": true,
+        "writable": true,
+        "lastOutputAt": 1791246841130,
+        "preview": "~/IdeaP/tiergear/.w/t/tiergear-probe on jang2162/tiergear-probe ❯                                        at 09:34:01 AM",
+        "executionHostId": "local"
+      }
+    ],
+    "hostScope": {
+      "hostIds": [
+        "local"
+      ],
+      "omittedHostIds": [
+        "runtime:07137426-a541-4a8e-897f-5b316a2b27eb",
+        "runtime:cf071552-cc27-401c-9d54-3cabff6091ba",
+        "ssh:ssh-1786065394622-ldo23k"
+      ],
+      "omittedHostSelectors": [
+        {
+          "hostId": "runtime:07137426-a541-4a8e-897f-5b316a2b27eb",
+          "selector": null
+        },
+        {
+          "hostId": "runtime:cf071552-cc27-401c-9d54-3cabff6091ba",
+          "selector": null
+        },
+        {
+          "hostId": "ssh:ssh-1786065394622-ldo23k",
+          "selector": "--host ssh:ssh-1786065394622-ldo23k"
+        }
+      ]
+    },
+    "topologyRevisions": {
+      "8db22c76-2921-46d5-a9c5-efd9d698eaf4::/Users/jang2162/IdeaProjects/tiergear/.worktrees/tiergear/tiergear-probe": 2
+    },
+    "totalCount": 2,
+    "truncated": false
+  },
+  "_meta": {
+    "runtimeId": "fb124fe1-5699-4e66-bc6c-a62d8d31a1a0"
+  }
+}

@@ -1,0 +1,19 @@
+{
+  "id": "22648377-a04d-40d8-bf43-3e9e3213c5c4",
+  "ok": true,
+  "result": {
+    "terminal": {
+      "handle": "term_be732e8a-f7ad-428c-ae36-b127b9bdffdc",
+      "tabId": "4bdf7a03-bd5a-4668-9f87-6f32c173e366",
+      "worktreeId": "8db22c76-2921-46d5-a9c5-efd9d698eaf4::/Users/jang2162/IdeaProjects/tiergear/.worktrees/tiergear/tiergear-probe",
+      "title": "tiergear-probe",
+      "executionHostId": "local",
+      "incarnationId": "b9d26f94-f15d-4592-b442-cb42dbaa86ec",
+      "hostPlatform": "darwin",
+      "surface": "visible"
+    }
+  },
+  "_meta": {
+    "runtimeId": "fb124fe1-5699-4e66-bc6c-a62d8d31a1a0"
+  }
+}
