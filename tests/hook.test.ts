@@ -606,6 +606,15 @@ describe('status for status-line tools', () => {
     expect(parseStatus(files[path]!)).toMatchObject({ model: 'sonnet', effort: 'medium', line: 'tiergear · unset 0.30 · sonnet/medium · unchanged (low confidence)' });
   });
 
+  it('finds the home through USERPROFILE when HOME is not set, as on Windows', async () => {
+    const { host, files } = fakeHost([{ tier: ['deep', 0.8] }]);
+    host.env.get = async (n) => (n === 'USERPROFILE' ? 'C:\\Users\\u' : n === 'TYPESAFE_API_KEY' ? 'k' : undefined);
+    const tiergear = createTiergear({});
+    await tiergear.promptSubmit(host, typed('refactor the parser'));
+    expect(parseStatus(files[statusPath('C:\\Users\\u', 's1')]!)).toMatchObject({ tier: 'deep', model: 'opus', effort: 'xhigh' });
+    expect(await tiergear.recent(host, 5)).toHaveLength(1);
+  });
+
   it('writes the applied model and effort, and the pause', async () => {
     const { host, files } = fakeHost([{ tier: ['deep', 0.8] }]);
     const tiergear = createTiergear({});

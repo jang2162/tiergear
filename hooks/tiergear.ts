@@ -97,6 +97,11 @@ export function stepOverride<T extends StepLike>(applied: Applied | null, step: 
   return next as T;
 }
 
+// A Windows session has no HOME, only USERPROFILE, which is also where the CLI's os.homedir() lands.
+async function homeOf(host: HookHost): Promise<string | undefined> {
+  return (await host.env.get('HOME')) || (await host.env.get('USERPROFILE')) || undefined;
+}
+
 function settingsEnv(settings: Readonly<Record<string, unknown>>, name: string): string | undefined {
   const env = settings['env'];
   const value = env && typeof env === 'object' ? (env as Record<string, unknown>)[name] : undefined;
@@ -183,7 +188,7 @@ export function createTiergear(options: Readonly<Record<string, unknown>>) {
   async function loadTables(host: HookHost): Promise<Tables> {
     if (tables) return tables;
     tables = DEFAULT_TABLES;
-    const home = await host.env.get('HOME');
+    const home = await homeOf(host);
     if (!home) return tables;
     let text: string;
     try {
@@ -210,7 +215,7 @@ export function createTiergear(options: Readonly<Record<string, unknown>>) {
   }
 
   async function readFloor(host: HookHost, now: number): Promise<FloorRecord | null> {
-    const home = await host.env.get('HOME');
+    const home = await homeOf(host);
     if (!home) return null;
     const cwd = await host.session.cwd();
     try {
@@ -234,7 +239,7 @@ export function createTiergear(options: Readonly<Record<string, unknown>>) {
 
   async function writeLog(host: HookHost, session: string, entry: LogEntry): Promise<void> {
     try {
-      const home = await host.env.get('HOME');
+      const home = await homeOf(host);
       if (!home) return;
       const path = decisionLogPath(home, session);
       const existing = await host.fs.read(path).catch(() => '');
@@ -252,7 +257,7 @@ export function createTiergear(options: Readonly<Record<string, unknown>>) {
     if (line === mem.statusLine) return;
     mem.statusLine = line;
     try {
-      const home = await host.env.get('HOME');
+      const home = await homeOf(host);
       if (!home) return;
       const { record, reason } = mem.shown;
       const status: StatusRecord = {
@@ -490,7 +495,7 @@ export function createTiergear(options: Readonly<Record<string, unknown>>) {
     },
     async recent(host: HookHost, limit: number): Promise<string[]> {
       try {
-        const home = await host.env.get('HOME');
+        const home = await homeOf(host);
         if (!home) return [];
         return recentDecisionLines(await host.fs.read(decisionLogPath(home, await host.session.id())), limit);
       } catch {
@@ -516,6 +521,7 @@ function hostOf($: EngineInterface): HookHost {
       // `$.env.get` takes literal names, so only the variables this hook reads are forwarded.
       get: async (name) => {
         if (name === 'HOME') return await $.env.get('HOME');
+        if (name === 'USERPROFILE') return await $.env.get('USERPROFILE');
         if (name === 'TYPESAFE_API_KEY') return await $.env.get('TYPESAFE_API_KEY');
         if (name === 'OLLAYA_API_KEY') return await $.env.get('OLLAYA_API_KEY');
         if (name === 'KEV_API_KEY') return await $.env.get('KEV_API_KEY');
