@@ -287,6 +287,8 @@ Raw prompt text is never written to the logs.
 
 `npm test`, `npm run typecheck` and `npm run validate:plugin` check a working copy. `types/claude-code.d.ts` is the hook API declaration Claude Code 2.1.289 generated; after a Claude Code update, replace it with the `.claude-plugin/types/claude-code/index.d.ts` the engine writes next to a loaded plugin.
 
+To release, set the same version in `package.json` and `.claude-plugin/plugin.json`, push, then publish a GitHub release tagged `v<version>` (`gh release create v<version> --generate-notes`). `.github/workflows/publish.yml` tests it and publishes it to npm through npm trusted publishing, with no token stored.
+
 ## License
 
 MIT
