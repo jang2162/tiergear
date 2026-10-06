@@ -2,6 +2,7 @@
   "name": "tiergear",
   "version": "0.1.0",
   "description": "A decision model picks the model and reasoning effort for each session and adjusts effort as the work changes.",
+  "author": { "name": "jang2162" },
   "license": "MIT",
   "userConfig": {
     "judge": { "type": "string", "title": "Judge", "description": "Decision model preset: jev, laya or kev.", "options": ["jev", "laya", "kev"], "default": "jev" },

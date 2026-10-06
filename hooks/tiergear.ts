@@ -429,7 +429,7 @@ export const register: Register = (on: On, options: PluginOptions) => {
 
   on('command.run', { command: 'tiergear' }, async ($) => {
     await $.ui.open({ id: RECENT_PANE, title: RECENT_TITLE });
-    return { text: 'tiergear: recent decisions opened.' };
+    return { text: 'Recent decisions opened.' };
   });
 
   // The status line itself cannot be pressed, so the band above the prompt repeats it with a button.

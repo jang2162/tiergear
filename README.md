@@ -16,17 +16,39 @@ Only prompts the user typed are judged: terminal input (`composer`), Remote Cont
 
 ## Install
 
-Requires Claude Code 2.1.289 or later.
+Requires Claude Code 2.1.289 or later. At the prompt of a Claude Code session:
+
+```
+/plugin install tiergear --marketplace jang2162/tiergear
+```
+
+Answer `y` to add the marketplace, then pick a scope (user is first). The hooks run in that session at once and in every new session under that scope. `/plugin` lists it as `tiergear@tiergear`. Set the judge's key (`TYPESAFE_API_KEY` for jev) or pick another judge in the plugin options.
+
+To update: `claude plugin update tiergear@tiergear`, then `/reload-plugins`.
+
+### CLI (optional)
+
+`tiergear launch`, `orca-spawn` and `stats` are a separate command-line tool; the hooks don't need it. Build it from a clone:
 
 ```bash
+git clone https://github.com/jang2162/tiergear.git ~/IdeaProjects/tiergear
 cd ~/IdeaProjects/tiergear
 npm install
 npm run build && npm link
+```
+
+`which tiergear` should print the CLI path.
+
+### From a clone (development)
+
+To run the hooks from your working copy instead, so `/reload-plugins` picks up edits without an update:
+
+```bash
 ln -s ~/IdeaProjects/tiergear ~/.claude/skills/tiergear
 claude plugin list | grep -A3 tiergear
 ```
 
-You should see `tiergear@skills-dir` and `Status: ✔ loaded`. `which tiergear` should print the CLI path. Plugin hooks load at session start, so open a new session after installing.
+You should see `tiergear@skills-dir` and `Status: ✔ loaded`. If `tiergear@tiergear` is also installed, it takes precedence and the clone is not loaded (`claude plugin list` says so); uninstall it with `claude plugin uninstall tiergear@tiergear` to run from the clone.
 
 ## Judges
 

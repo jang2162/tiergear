@@ -144,7 +144,7 @@ describe('recent decisions pane', () => {
   it('opens from /tiergear', async () => {
     const hook = load();
     const { $, opened } = fakeDollar();
-    expect(await hook('command.run', { command: 'tiergear' })($, { command: 'tiergear', args: '' })).toEqual({ text: 'tiergear: recent decisions opened.' });
+    expect(await hook('command.run', { command: 'tiergear' })($, { command: 'tiergear', args: '' })).toEqual({ text: 'Recent decisions opened.' });
     expect(opened).toEqual([{ id: 'tiergear-recent', title: 'tiergear: recent decisions' }]);
   });
 });

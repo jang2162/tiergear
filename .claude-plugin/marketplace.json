@@ -1,0 +1,12 @@
+{
+  "name": "tiergear",
+  "owner": { "name": "jang2162" },
+  "description": "tiergear: let a decision model pick the model and reasoning effort for Claude Code sessions.",
+  "plugins": [
+    {
+      "name": "tiergear",
+      "source": "./",
+      "description": "A decision model picks the model and reasoning effort for each session and adjusts effort as the work changes."
+    }
+  ]
+}
