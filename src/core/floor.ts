@@ -1,9 +1,11 @@
-import { isTier, type Tier } from './tiers.js';
+import { isTier, tierRank, type Tier } from './tiers.js';
 
 export interface FloorRecord {
   worktree: string;
   tier: Tier;
   createdAt: number;
+  // The highest tier the session may reach (`--max-tier`); files written before ceilings have none.
+  ceiling?: Tier;
 }
 
 export const FLOOR_TTL_MS = 24 * 60 * 60 * 1000;
@@ -42,6 +44,8 @@ export function parseFloor(text: string, worktree: string, now: number): FloorRe
   if (typeof record.worktree !== 'string') return null;
   if (normalizePath(record.worktree) !== normalizePath(worktree)) return null;
   if (!isTier(record.tier) || typeof record.createdAt !== 'number') return null;
+  if (record.ceiling !== undefined && (!isTier(record.ceiling) || tierRank(record.ceiling) < tierRank(record.tier))) return null;
   if (now - record.createdAt > FLOOR_TTL_MS) return null;
-  return { worktree: record.worktree, tier: record.tier, createdAt: record.createdAt };
+  const floor: FloorRecord = { worktree: record.worktree, tier: record.tier, createdAt: record.createdAt };
+  return record.ceiling === undefined ? floor : { ...floor, ceiling: record.ceiling };
 }

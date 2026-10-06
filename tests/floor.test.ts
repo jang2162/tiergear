@@ -23,4 +23,16 @@ describe('floor', () => {
     expect(parseFloor(JSON.stringify({ worktree: '/w/x', tier: 'huge', createdAt: now }), '/w/x', now)).toBeNull();
     expect(parseFloor('{', '/w/x', now)).toBeNull();
   });
+
+  it('carries a ceiling, and reads a file written before ceilings as having none', () => {
+    const capped = serializeFloor({ worktree: '/w/x', tier: 'quick', createdAt: now, ceiling: 'standard' });
+    expect(parseFloor(capped, '/w/x', now)).toEqual({ worktree: '/w/x', tier: 'quick', createdAt: now, ceiling: 'standard' });
+    const old = JSON.stringify({ worktree: '/w/x', tier: 'deep', createdAt: now });
+    expect(parseFloor(old, '/w/x', now)).toEqual({ worktree: '/w/x', tier: 'deep', createdAt: now });
+  });
+
+  it('ignores a record whose ceiling is not a tier or sits below its tier', () => {
+    expect(parseFloor(JSON.stringify({ worktree: '/w/x', tier: 'quick', createdAt: now, ceiling: 'huge' }), '/w/x', now)).toBeNull();
+    expect(parseFloor(JSON.stringify({ worktree: '/w/x', tier: 'deep', createdAt: now, ceiling: 'quick' }), '/w/x', now)).toBeNull();
+  });
 });

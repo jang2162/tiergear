@@ -15,6 +15,8 @@ export interface SessionRecord {
   firstPrompt: string;
   tier: Tier | null;
   floor: Tier | null;
+  // From the launch floor file: the tier is never raised above it.
+  ceiling: Tier | null;
   // The model the session is held on after the first turn (an alias).
   model: string | null;
   // What turn.step writes on main-loop requests.
@@ -59,6 +61,7 @@ export function newRecord(firstPrompt: string, now: number): SessionRecord {
     firstPrompt: abridge(firstPrompt, FIRST_PROMPT_CHARS),
     tier: null,
     floor: null,
+    ceiling: null,
     model: null,
     applied: null,
     downStreak: 0,
@@ -92,6 +95,8 @@ export function parseRecord(value: unknown): SessionRecord | null {
     firstPrompt: r['firstPrompt'],
     tier,
     floor,
+    // Records stored before ceilings have none.
+    ceiling: isTier(r['ceiling']) ? r['ceiling'] : null,
     model: typeof r['model'] === 'string' ? r['model'] : null,
     applied: readApplied(r['applied']),
     downStreak: count(r['downStreak']),
@@ -134,7 +139,14 @@ export function decideFirstTurn(input: {
   if (floor) {
     const target = firstTarget(tables, 'claude', floor.tier);
     return {
-      record: { ...record, tier: floor.tier, floor: floor.tier, model: target.model, applied: { model: target.model, effort: target.effort } },
+      record: {
+        ...record,
+        tier: floor.tier,
+        floor: floor.tier,
+        ceiling: floor.ceiling ?? null,
+        model: target.model,
+        applied: { model: target.model, effort: target.effort },
+      },
       change: 'set',
       confidence: null,
       reason: `launched at ${floor.tier}`,
@@ -182,12 +194,16 @@ export function decideNextTurn(input: {
   }
 
   const current = record.tier;
+  const raise = (tier: Tier, reason: string): Decision => {
+    const capped = record.ceiling !== null && tierRank(tier) > tierRank(record.ceiling) ? record.ceiling : tier;
+    return tierRank(capped) > tierRank(current) ? move(capped, 'up', reason) : hold('at ceiling');
+  };
   if (answer && tierRank(answer.tier) > tierRank(current) && answer.confidence >= config.minUpgradeConfidence) {
-    return move(answer.tier, 'up', 'harder step');
+    return raise(answer.tier, 'harder step');
   }
 
   const stuck = (verdict?.stuck ?? 0) >= config.stuckConfidence || input.repeatedFailures >= config.stuckFailures;
-  if (stuck) return current === 'max' ? hold('stuck at max') : move(stepUp(current), 'up', 'stuck');
+  if (stuck) return current === 'max' ? hold('stuck at max') : raise(stepUp(current), 'stuck');
 
   // Lowering needs a confident judge on consecutive turns, so one terse follow-up cannot drop the tier.
   if (answer && tierRank(answer.tier) < tierRank(current) && answer.confidence >= config.minDowngradeConfidence) {

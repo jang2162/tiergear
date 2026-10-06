@@ -71,7 +71,12 @@ describe('decideFirstTurn', () => {
 
   it('uses a launch floor without the judge', () => {
     const d = first(null, { floor: { worktree: '/w', tier: 'max', createdAt: now } });
-    expect(d.record).toMatchObject({ tier: 'max', floor: 'max', applied: { model: 'fable', effort: 'xhigh' } });
+    expect(d.record).toMatchObject({ tier: 'max', floor: 'max', ceiling: null, applied: { model: 'fable', effort: 'xhigh' } });
+  });
+
+  it('keeps the launch ceiling on the record', () => {
+    const d = first(null, { floor: { worktree: '/w', tier: 'quick', createdAt: now, ceiling: 'standard' } });
+    expect(d.record).toMatchObject({ tier: 'quick', floor: 'quick', ceiling: 'standard' });
   });
 
   it('follows overridden tables', () => {
@@ -132,6 +137,23 @@ describe('decideNextTurn', () => {
     expect(d.record.tier).toBe('standard');
   });
 
+  it('raises no higher than the ceiling, and holds at it', () => {
+    const capped = next(at('quick', { ceiling: 'standard' }), verdict('max', 0.9));
+    expect(capped.change).toBe('up');
+    expect(capped.record.tier).toBe('standard');
+    const held = next(capped.record, verdict('max', 0.9));
+    expect(held.change).toBe('hold');
+    expect(held.reason).toBe('at ceiling');
+    expect(held.record.tier).toBe('standard');
+  });
+
+  it('raises no higher than the ceiling when stuck', () => {
+    expect(next(at('quick', { ceiling: 'standard' }), null, 3).record.tier).toBe('standard');
+    const held = next(at('standard', { ceiling: 'standard' }), verdict('standard', 0.9, 0.9));
+    expect(held.change).toBe('hold');
+    expect(held.reason).toBe('at ceiling');
+  });
+
   it('sets a tier later from the live session model when the first turn held', () => {
     const d = next(newRecord('t', now), verdict('deep', 0.7), 0, config, 'sonnet');
     expect(d.change).toBe('set');
@@ -185,6 +207,13 @@ describe('records and status', () => {
     expect(parseRecord(JSON.parse(JSON.stringify(r)))).toEqual(r);
     expect(parseRecord({ tier: 'huge' })).toBeNull();
     expect(parseRecord(null)).toBeNull();
+  });
+
+  it('round-trips a ceiling and reads a record stored before ceilings as having none', () => {
+    const capped = at('quick', { ceiling: 'standard' });
+    expect(parseRecord(JSON.parse(JSON.stringify(capped)))).toEqual(capped);
+    const { ceiling: _, ...old } = capped;
+    expect(parseRecord(JSON.parse(JSON.stringify(old)))?.ceiling).toBeNull();
   });
 
   it('describes changes and holds', () => {

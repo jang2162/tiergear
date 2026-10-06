@@ -198,6 +198,32 @@ describe('promptSubmit', () => {
     expect(tiergear.applied('s1')).toEqual({ model: 'sonnet', effort: 'high' });
   });
 
+  it('keeps a launched session under the ceiling its floor file names, by the judge or when stuck', async () => {
+    const files = { [floorPath('/home/u', '/w/task')]: serializeFloor({ worktree: '/w/task', tier: 'quick', createdAt: 1_800_000_000_000, ceiling: 'standard' }) };
+    const { host } = fakeHost([{ tier: ['max', 0.9], stuck: 0 }, { tier: ['max', 0.9], stuck: 0 }, { tier: ['standard', 0.9], stuck: 0 }], files);
+    const tiergear = createTiergear({});
+    await tiergear.promptSubmit(host, typed('go'));
+    expect(tiergear.applied('s1')).toEqual({ model: 'sonnet', effort: 'low' });
+    await tiergear.promptSubmit(host, typed('this needs a deep redesign'));
+    expect(tiergear.applied('s1')).toEqual({ model: 'sonnet', effort: 'medium' });
+    await tiergear.promptSubmit(host, typed('even deeper'));
+    expect(tiergear.statusLine('s1')).toBe('tiergear · standard 0.90 · sonnet/medium · unchanged (at ceiling)');
+    for (let i = 0; i < 3; i++) tiergear.toolResult('s1', 'Bash', true, 'FAIL a.test.ts');
+    await tiergear.promptSubmit(host, typed('try again'));
+    expect(tiergear.applied('s1')).toEqual({ model: 'sonnet', effort: 'medium' });
+    expect(tiergear.statusLine('s1')).toContain('unchanged (at ceiling)');
+  });
+
+  it('reads a floor file written before ceilings and raises above it as before', async () => {
+    const files = { [floorPath('/home/u', '/w/task')]: JSON.stringify({ worktree: '/w/task', tier: 'quick', createdAt: 1_800_000_000_000 }) };
+    const { host } = fakeHost([{ tier: ['max', 0.9], stuck: 0 }], files);
+    const tiergear = createTiergear({});
+    await tiergear.promptSubmit(host, typed('go'));
+    expect(tiergear.applied('s1')).toEqual({ model: 'sonnet', effort: 'low' });
+    await tiergear.promptSubmit(host, typed('this needs a deep redesign'));
+    expect(tiergear.applied('s1')).toEqual({ model: 'sonnet', effort: 'max' });
+  });
+
   it('does not raise to max again after a harder-step raise reset the failure count', async () => {
     const { host } = fakeHost([{ tier: ['standard', 0.8] }, { tier: ['deep', 0.8], stuck: 0 }, { tier: ['deep', 0.8], stuck: 0 }]);
     const tiergear = createTiergear({});
