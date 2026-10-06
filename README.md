@@ -6,7 +6,7 @@ A plugin and CLI that lets a decision model (the judge) pick the model and reaso
 - **Later turns**: by default the model stays and only effort changes. Raising is easy (confidence 0.5); lowering is hard (confidence 0.85 for 2 turns in a row).
 - **Floor**: the tier never drops below one step under the first decision. Sessions started with `tiergear launch`/`orca-spawn` use the launch tier itself as their floor, so a `--min-tier` holds for the whole session.
 - **Ceiling**: a session launched with `--max-tier` never rises above it, whether the judge asks for a harder tier or the session looks stuck.
-- **Pick a tier, or off, from the band**: the band above the prompt has a **Tier** picker (see [Status band](#status-band)). A picked tier is a starting point; the judge keeps moving it as usual. **off** withdraws what tiergear applies until you pick a tier again.
+- **Pick a tier, or off, from the band**: the band above the prompt has a button per tier and one for **off** (see [Status band](#status-band)). A picked tier is a starting point; the judge keeps moving it as usual. **off** withdraws what tiergear applies until you pick a tier again.
 - **Manual changes pause routing**: changing the model or effort yourself with `/model` or `/effort` mid-session pauses the session, just like picking **off**, and writes `[tiergear] manual model/effort change — routing paused for this session` to the hook log once. Pick a tier to hand it back to tiergear. It compares the session values the engine reports between turns, so tiergear's own changes don't trigger it. If the engine switches to a fallback model from the first request of a turn, that can also look like a manual change.
 
 If the judge is slow or fails, that turn proceeds untouched.
@@ -151,7 +151,14 @@ Change these in `/config` (plugin options).
 
 ## Status band
 
-tiergear shows its state in one line just above the prompt, followed by its controls: `tiergear · deep 0.91 → opus/xhigh  Tier: deep  [ Recent ]`. It doesn't use the status line below the prompt; a line an earlier version left there is cleared on the first judged prompt. Before anything is decided the line reads just `tiergear`.
+tiergear shows its state just above the prompt: a line, and under it a button per tier, one for off, and **[ Recent ]**. The choice in effect is bracketed; the others are dim.
+
+```
+tiergear · deep 0.91 → opus/xhigh
+off  trivial  quick  standard  [deep]  max  [ Recent ]
+```
+
+It doesn't use the status line below the prompt; a line an earlier version left there is cleared on the first judged prompt. Before anything is decided the line reads just `tiergear` and no button is bracketed.
 
 The line starts with `tiergear ·` and shows the model and effort the session is running on as `model/effort`; a model without effort shows `-`.
 
@@ -160,15 +167,14 @@ The line starts with `tiergear ·` and shows the model and effort the session is
 - The line is set when a prompt is judged, then refreshed with the values the engine reports when the turn starts. Before the session's first turn the values may not be known yet: an unchanged line then leaves them out, and an applied line shows only the effort if tiergear isn't setting the model.
 - `unset` appears when no tier has been decided yet, and `n/d` takes the place of the confidence when the judge gave no answer (as after a pick from the band).
 
-Reasons for no change: `no answer` (no judge response), `low confidence`, `same tier`, `paused` (Tier is off), `manual tier` (the first prompt runs on a tier picked before it), `at floor` (can't go lower), `at ceiling` (can't go higher than the launch's `--max-tier`), `easier step N/M` (Nth lowering candidate, M needed), `stuck at max`.
+Reasons for no change: `no answer` (no judge response), `low confidence`, `same tier`, `paused` (off is chosen), `manual tier` (the first prompt runs on a tier picked before it), `at floor` (can't go lower), `at ceiling` (can't go higher than the launch's `--max-tier`), `easier step N/M` (Nth lowering candidate, M needed), `stuck at max`.
 
-### Tier picker
+### Tier buttons
 
-- **Tier** (off, trivial to max): a tier applies the picked tier from the next request, even in the middle of a running turn. Mid-session only the effort changes (from the session model's column in table B), unless `switchModelMidSession` is on. The judge goes on from the picked tier by the usual rules. A pick below the floor lowers the floor to it. A pick may go above a launch's `--max-tier`, but the judge still won't raise past it.
-- Picked before the first prompt, the tier works like a launch tier: the first turn runs on its table A model and effort without asking the judge, and the judge takes over from the second prompt.
-- **off** withdraws the model and effort tiergear applies, so the session runs on its own (startup flags, `/model`, `/effort`), and stops asking the judge. The picker shows `off` until you pick a tier.
+- One click picks. A tier applies from the next request, even in the middle of a running turn. Mid-session only the effort changes (from the session model's column in table B), unless `switchModelMidSession` is on. The judge goes on from the picked tier by the usual rules. A pick below the floor lowers the floor to it. A pick may go above a launch's `--max-tier`, but the judge still won't raise past it.
+- Picked before the first prompt, a tier works like a launch tier: the first turn runs on its table A model and effort without asking the judge, and the judge takes over from the second prompt.
+- **off** withdraws the model and effort tiergear applies, so the session runs on its own (startup flags, `/model`, `/effort`), and stops asking the judge. `[off]` stays bracketed until you pick a tier.
 - Picking a tier while off turns tiergear back on at that tier, on the session's own model with the effort from the tier, and the judge is asked again from the next prompt. That prompt becomes the task the judge reads.
-- The mobile app draws no picker, so there is no way to turn tiergear off from it.
 
 ### Recent decisions
 

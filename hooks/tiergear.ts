@@ -504,7 +504,6 @@ function hostOf($: EngineInterface): HookHost {
 }
 
 const RECENT_PANE = 'tiergear-recent';
-const TIER_PICKER = 'tiergear-tier';
 const OFF = 'off';
 const RECENT_TITLE = 'tiergear: recent decisions';
 const RECENT_MAX = 50;
@@ -529,26 +528,23 @@ export const register: Register = (on: On, options: PluginOptions) => {
     const session = await $.session.id().catch(() => null);
     if (session === null) return below;
     const { tier, paused } = await tiergear.controls(hostOf($));
-    const table = $.ui.resolve(e);
-    const { Box, Text, Button } = table;
-    const parts = [Text({ dimColor: true, children: tiergear.statusLine(session) ?? 'tiergear' })];
-    // The mobile app draws no picker.
-    if ('Select' in table) {
-      parts.push(
-        table.Select({
-          key: TIER_PICKER,
-          label: 'Tier:',
-          options: [OFF, ...TIER_ORDER].map((value) => ({ value })),
-          ...(paused ? { value: OFF } : tier !== null ? { value: tier } : {}),
-          onSelect: async (value) => {
-            if (value === OFF) await tiergear.pause(hostOf($));
-            else if (isTier(value)) await tiergear.pick(hostOf($), value);
-          },
-        }),
-      );
-    }
+    const { Box, Text, Button } = $.ui.resolve(e);
+    const chosen = paused ? OFF : tier;
+    // One plain button per choice, so a single click picks; the one in effect bracketed at full strength.
+    const buttons = [OFF, ...TIER_ORDER].map((value) =>
+      Button({
+        key: `tiergear-tier-${value}`,
+        label: value === chosen ? `[${value}]` : value,
+        plain: true,
+        dimColor: value !== chosen,
+        onPress: async () => {
+          if (value === OFF) await tiergear.pause(hostOf($));
+          else if (isTier(value)) await tiergear.pick(hostOf($), value);
+        },
+      }),
+    );
     if (tiergear.config.showRecentButton) {
-      parts.push(
+      buttons.push(
         Button({
           label: 'Recent',
           onPress: async () => {
@@ -558,7 +554,8 @@ export const register: Register = (on: On, options: PluginOptions) => {
         }),
       );
     }
-    return Box({ flexDirection: 'column', children: [below, Box({ flexDirection: 'row', gap: 1, children: parts })] });
+    const line = Text({ dimColor: true, children: tiergear.statusLine(session) ?? 'tiergear' });
+    return Box({ flexDirection: 'column', children: [below, line, Box({ flexDirection: 'row', gap: 2, children: buttons })] });
   });
 
   on('ui.render', { component: 'Pane', requestId: RECENT_PANE }, async ($, e) => {

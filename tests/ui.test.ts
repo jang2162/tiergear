@@ -16,7 +16,7 @@ function load(options: Record<string, unknown> = {}) {
     hooks.find((h) => h.event === event && Object.entries(match).every(([k, v]) => h.matcher?.[k] === v))!.hook;
 }
 
-function fakeDollar(surface: 'terminal' | 'mobile' = 'terminal') {
+function fakeDollar() {
   const files: Record<string, string> = {};
   const store = new Map<string, unknown>();
   const opened: unknown[] = [];
@@ -58,10 +58,7 @@ function fakeDollar(surface: 'terminal' | 'mobile' = 'terminal') {
         panes.splice(panes.findIndex((p) => p.id === pane.id), 1);
       },
       panes: async () => [...panes],
-      resolve: () =>
-        surface === 'mobile'
-          ? { Box: element('Box'), Text: element('Text'), Button: element('Button') }
-          : { Box: element('Box'), Text: element('Text'), Button: element('Button'), Select: element('Select') },
+      resolve: () => ({ Box: element('Box'), Text: element('Text'), Button: element('Button') }),
     },
     command: { register: async () => {} },
   };
@@ -71,84 +68,79 @@ function fakeDollar(surface: 'terminal' | 'mobile' = 'terminal') {
 const band = (hasSurvey = false) => ({ component: 'AbovePrompt', surface: 'terminal', props: { hasSurvey } });
 const below = async () => 'BELOW';
 
-// The band's own row: the line, then the controls.
-async function row(hook: (event: string, match?: Record<string, unknown>) => Hook, $: unknown): Promise<Element[]> {
+// The band's own part: the line, then a row of buttons.
+async function drawn(hook: (event: string, match?: Record<string, unknown>) => Hook, $: unknown): Promise<{ line: unknown; buttons: Element[] }> {
   const tree = (await hook('ui.render', { component: 'AbovePrompt' })($, band(), below)) as Element;
-  const [kept, ours] = tree.props.children as [string, Element];
+  const [kept, line, row] = tree.props.children as [string, Element, Element];
   expect(kept).toBe('BELOW');
-  return [ours.props.children].flat() as Element[];
+  return { line: line.props.children, buttons: [row.props.children].flat() as Element[] };
 }
 
-const labelled = (parts: Element[], label: string) => parts.find((p) => p.props.label === label)!;
+const labelled = (buttons: Element[], label: string) => buttons.find((b) => b.props.label === label)!;
+const tierButton = (buttons: Element[], value: string) => buttons.find((b) => b.props.key === `tiergear-tier-${value}`)!;
+const press = (button: Element) => (button.props.onPress as () => Promise<void>)();
+// The tier in effect is drawn bracketed at full strength, the others dim.
+const current = (buttons: Element[]) => buttons.filter((b) => String(b.props.key).startsWith('tiergear-tier-') && b.props.dimColor !== true).map((b) => b.props.label);
 
 async function decide(hook: (event: string, match?: Record<string, unknown>) => Hook, $: unknown) {
   await hook('prompt.submit')($, { text: 'refactor the parser', origin: { kind: 'composer' } }, async (e: unknown) => e);
 }
 
 describe('band above the prompt', () => {
-  it('offers the controls before the first prompt, with no tier picked yet', async () => {
+  it('offers a button per tier and off before the first prompt, none of them current', async () => {
     const hook = load();
     const { $ } = fakeDollar();
-    const parts = await row(hook, $);
-    expect(parts.map((p) => p.type)).toEqual(['Text', 'Select', 'Button']);
-    expect(parts[0]!.props.children).toBe('tiergear');
-    expect(parts[1]!.props).toMatchObject({ label: 'Tier:', options: ['off', 'trivial', 'quick', 'standard', 'deep', 'max'].map((value) => ({ value })) });
-    expect('value' in parts[1]!.props).toBe(false);
-    expect(parts.map((p) => p.props.label)).toEqual([undefined, 'Tier:', 'Recent']);
+    const { line, buttons } = await drawn(hook, $);
+    expect(line).toBe('tiergear');
+    expect(buttons.map((b) => b.props.label)).toEqual(['off', 'trivial', 'quick', 'standard', 'deep', 'max', 'Recent']);
+    expect(buttons.slice(0, 6).every((b) => b.props.plain === true && b.props.dimColor === true)).toBe(true);
+    expect(current(buttons)).toEqual([]);
   });
 
-  it('repeats the status line with the tier picker and a Recent button that opens the pane', async () => {
+  it('repeats the status line, marks the tier in effect, and has a Recent button that opens the pane', async () => {
     const hook = load();
     const { $, opened } = fakeDollar();
     await decide(hook, $);
-    const parts = await row(hook, $);
-    expect(parts[0]!.props.children).toBe('tiergear · deep 0.80 → opus/xhigh');
-    expect(parts[1]!.props.value).toBe('deep');
-    await (labelled(parts, 'Recent').props.onPress as () => Promise<void>)();
+    const { line, buttons } = await drawn(hook, $);
+    expect(line).toBe('tiergear · deep 0.80 → opus/xhigh');
+    expect(current(buttons)).toEqual(['[deep]']);
+    await press(labelled(buttons, 'Recent'));
     expect(opened).toEqual([{ id: 'tiergear-recent', title: 'tiergear: recent decisions' }]);
   });
 
-  it('picks a tier from the band', async () => {
+  it('picks a tier with one press', async () => {
     const hook = load();
     const { $ } = fakeDollar();
     await decide(hook, $);
-    await ((await row(hook, $))[1]!.props.onSelect as (value: string) => Promise<void>)('quick');
-    const parts = await row(hook, $);
-    expect(parts[1]!.props.value).toBe('quick');
-    expect(parts[0]!.props.children).toBe('tiergear · quick n/d → opus/low');
+    await press(tierButton((await drawn(hook, $)).buttons, 'quick'));
+    const { line, buttons } = await drawn(hook, $);
+    expect(current(buttons)).toEqual(['[quick]']);
+    expect(line).toBe('tiergear · quick n/d → opus/low');
   });
 
-  it('turns routing off from the picker, and back on with a tier', async () => {
+  it('turns routing off with one press, and back on with a tier', async () => {
     const hook = load();
     const { $ } = fakeDollar();
     await decide(hook, $);
-    const select = async (value: string) => ((await row(hook, $))[1]!.props.onSelect as (value: string) => Promise<void>)(value);
-    await select('off');
-    const off = await row(hook, $);
-    expect(off[1]!.props.value).toBe('off');
-    expect(off[0]!.props.children).toContain('unchanged (paused)');
-    await select('deep');
-    const on = await row(hook, $);
-    expect(on[1]!.props.value).toBe('deep');
-    expect(on[0]!.props.children).toBe('tiergear · deep n/d → opus/xhigh');
-  });
-
-  it('leaves the picker out on a surface that draws none', async () => {
-    const hook = load();
-    const { $ } = fakeDollar('mobile');
-    await decide(hook, $);
-    expect((await row(hook, $)).map((p) => p.props.label)).toEqual([undefined, 'Recent']);
+    await press(tierButton((await drawn(hook, $)).buttons, 'off'));
+    const off = await drawn(hook, $);
+    expect(current(off.buttons)).toEqual(['[off]']);
+    expect(off.line).toContain('unchanged (paused)');
+    await press(tierButton(off.buttons, 'deep'));
+    const on = await drawn(hook, $);
+    expect(current(on.buttons)).toEqual(['[deep]']);
+    expect(on.line).toBe('tiergear · deep n/d → opus/xhigh');
   });
 
   it('closes the pane on the next press, and opens it again after that', async () => {
     const hook = load();
     const { $, opened, closed } = fakeDollar();
     await decide(hook, $);
-    const press = labelled(await row(hook, $), 'Recent').props.onPress as () => Promise<void>;
-    await press();
-    await press();
+    const recent = labelled((await drawn(hook, $)).buttons, 'Recent');
+    await press(recent);
+    await press(recent);
     expect(closed).toEqual([{ id: 'tiergear-recent' }]);
-    await press();
+    await press(recent);
     expect(opened).toHaveLength(2);
   });
 
@@ -156,9 +148,9 @@ describe('band above the prompt', () => {
     const hook = load({ showRecentButton: false });
     const { $ } = fakeDollar();
     await decide(hook, $);
-    const parts = await row(hook, $);
-    expect(parts.map((p) => p.props.label)).toEqual([undefined, 'Tier:']);
-    expect(parts[0]!.props.children).toBe('tiergear · deep 0.80 → opus/xhigh');
+    const { line, buttons } = await drawn(hook, $);
+    expect(buttons.map((b) => b.props.label)).toEqual(['off', 'trivial', 'quick', 'standard', '[deep]', 'max']);
+    expect(line).toBe('tiergear · deep 0.80 → opus/xhigh');
   });
 
   it('yields to a survey', async () => {
