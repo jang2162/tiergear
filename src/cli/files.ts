@@ -1,14 +1,21 @@
-import { mkdir, readFile, readdir, writeFile } from 'node:fs/promises';
-import { dirname, join } from 'node:path';
+import { mkdir, readFile, readdir, realpath, writeFile } from 'node:fs/promises';
+import { dirname, join, resolve } from 'node:path';
 import { floorPath, normalizePath, serializeFloor } from '../core/floor.js';
 import { appendLogLine, decisionLogPath, decisionsDir, parseLogLines, type LogEntry } from '../core/log.js';
 import { DEFAULT_TABLES, parseTablesFile, tablesPath, type Tables } from '../core/tables.js';
 import type { Tier } from '../core/tiers.js';
 
+// The hook matches the session's cwd, which Claude Code reports as an absolute physical path.
+export async function realWorktree(worktree: string): Promise<string> {
+  const absolute = resolve(worktree);
+  return realpath(absolute).catch(() => absolute);
+}
+
 export async function writeFloorFile(home: string, worktree: string, tier: Tier, now: number): Promise<string> {
-  const path = floorPath(home, worktree);
+  const real = normalizePath(await realWorktree(worktree));
+  const path = floorPath(home, real);
   await mkdir(dirname(path), { recursive: true });
-  await writeFile(path, serializeFloor({ worktree: normalizePath(worktree), tier, createdAt: now }));
+  await writeFile(path, serializeFloor({ worktree: real, tier, createdAt: now }));
   return path;
 }
 

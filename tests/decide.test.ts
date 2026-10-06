@@ -14,6 +14,7 @@ import {
   type SessionRecord,
 } from '../src/core/decide.js';
 import type { Verdict } from '../src/core/judge.js';
+import { abridge } from '../src/core/state.js';
 import { DEFAULT_TABLES } from '../src/core/tables.js';
 import type { Tier } from '../src/core/tiers.js';
 
@@ -73,8 +74,13 @@ describe('decideFirstTurn', () => {
     expect(first(verdict('deep'), { tables: custom }).record.applied).toEqual({ model: 'opus', effort: 'max' });
   });
 
+  it('stores the first prompt abridged to 2000 chars', () => {
+    expect(newRecord('y'.repeat(5000), now).firstPrompt).toBe(abridge('y'.repeat(5000), 2000));
+    expect(newRecord('short', now).firstPrompt).toBe('short');
+  });
+
   it('does nothing for a pinned session', () => {
-    const d = first(verdict('max'), { record: { ...newRecord('t', now), pinned: true } });
+    const d = first(verdict('max'), { record: { ...newRecord('t', now), pinned: true, applied: { effort: 'low' } } });
     expect(d.change).toBe('hold');
     expect(d.record.applied).toBeNull();
   });
@@ -147,8 +153,11 @@ describe('decideNextTurn', () => {
     expect(next(at('standard'), verdict('deep', 0.4)).reason).toBe('low confidence');
   });
 
-  it('holds a pinned session', () => {
-    expect(next(at('quick', { pinned: true }), verdict('max'), 5).change).toBe('hold');
+  it('holds a pinned session and clears applied, so its own model and effort rule', () => {
+    const d = next(at('quick', { pinned: true }), verdict('max'), 5);
+    expect(d.change).toBe('hold');
+    expect(d.reason).toBe('pinned');
+    expect(d.record.applied).toBeNull();
   });
 });
 

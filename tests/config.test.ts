@@ -37,4 +37,9 @@ describe('resolveConfig', () => {
     expect(config).toMatchObject({ judgeBaseUrl: 'https://me--kev-api.modal.run', judgeApiKey: 'k', switchModelMidSession: true, turnTimeoutMs: 900, downgradeStreak: 2, firstTurnTimeoutMs: 3000, judgeModel: 'kev-latest' });
     expect(resolveConfig({ judge: 'gpt' }).judge).toBe('jev');
   });
+
+  it('clamps judge timeouts to 8000ms, inside the 10s hook budget', () => {
+    expect(resolveConfig({ firstTurnTimeoutMs: 20_000, turnTimeoutMs: 9000 })).toMatchObject({ firstTurnTimeoutMs: 8000, turnTimeoutMs: 8000 });
+    expect(resolveConfig({ firstTurnTimeoutMs: 7999 }).firstTurnTimeoutMs).toBe(7999);
+  });
 });

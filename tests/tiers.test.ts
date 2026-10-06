@@ -29,6 +29,10 @@ describe('tiers', () => {
     expect(claudeModelId('claude-sonnet-5-5')).toBe('claude-sonnet-5-5');
     expect(claudeAlias('claude-opus-5-5')).toBe('opus');
     expect(claudeAlias('mystery')).toBe('mystery');
+    expect(claudeAlias('claude-haiku-4-5-20251001')).toBe('haiku');
+    expect(claudeAlias('claude-opus-5-5[1m]')).toBe('opus');
+    expect(claudeAlias('claude-sonnet-5-50')).toBe('claude-sonnet-5-50');
+    expect(claudeAlias('sonnet')).toBe('sonnet');
   });
 
   it('builds launch commands and leaves out a null effort', () => {

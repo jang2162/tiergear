@@ -4,7 +4,7 @@
   "description": "A decision model picks the model and reasoning effort for each session and adjusts effort as the work changes.",
   "license": "MIT",
   "userConfig": {
-    "judge": { "type": "string", "title": "Judge", "description": "Decision model preset: jev, laya or kev.", "default": "jev" },
+    "judge": { "type": "string", "title": "Judge", "description": "Decision model preset: jev, laya or kev.", "options": ["jev", "laya", "kev"], "default": "jev" },
     "judgeBaseUrl": { "type": "string", "title": "Judge base URL", "description": "Leave unset for the preset's address." },
     "judgeModel": { "type": "string", "title": "Judge model", "description": "Leave unset for the preset's model." },
     "judgeApiKey": { "type": "string", "title": "Judge API key", "description": "Leave unset to use the preset's environment variable (TYPESAFE_API_KEY, OLLAYA_API_KEY, KEV_API_KEY).", "sensitive": true },
@@ -14,7 +14,7 @@
     "downgradeStreak": { "type": "number", "title": "Turns to lower", "description": "Consecutive confident turns needed before lowering one step.", "default": 2 },
     "stuckConfidence": { "type": "number", "title": "Stuck confidence", "description": "Judge stuck probability that raises the tier one step.", "default": 0.6 },
     "stuckFailures": { "type": "number", "title": "Repeated failures", "description": "Identical tool failures in a row that raise the tier one step.", "default": 3 },
-    "firstTurnTimeoutMs": { "type": "number", "title": "First-turn latency budget (ms)", "description": "Leave unset for the preset's value." },
-    "turnTimeoutMs": { "type": "number", "title": "Latency budget (ms)", "description": "Leave unset for the preset's value." }
+    "firstTurnTimeoutMs": { "type": "number", "title": "First-turn latency budget (ms)", "description": "Leave unset for the preset's value. At most 8000." },
+    "turnTimeoutMs": { "type": "number", "title": "Latency budget (ms)", "description": "Leave unset for the preset's value. At most 8000." }
   }
 }

@@ -15,6 +15,9 @@ export interface Config {
   turnTimeoutMs: number;
 }
 
+// A hook has 10s; the judge gets at most 8s of it so the rest of the hook still fits.
+export const MAX_JUDGE_TIMEOUT_MS = 8000;
+
 type NumberKey = { [K in keyof Config]-?: Config[K] extends number ? K : never }[keyof Config];
 
 const NUMBER_KEYS: readonly NumberKey[] = [
@@ -52,6 +55,8 @@ export function resolveConfig(options: Readonly<Record<string, unknown>>): Confi
     const value = options[key];
     if (typeof value === 'number' && Number.isFinite(value)) config[key] = value;
   }
+  config.firstTurnTimeoutMs = Math.min(config.firstTurnTimeoutMs, MAX_JUDGE_TIMEOUT_MS);
+  config.turnTimeoutMs = Math.min(config.turnTimeoutMs, MAX_JUDGE_TIMEOUT_MS);
   const apiKey = text(options, 'judgeApiKey');
   if (apiKey) config.judgeApiKey = apiKey;
   return config;

@@ -80,6 +80,7 @@ export async function main(argv: string[]): Promise<number> {
 
   if (command === 'launch') {
     const launch = await plan(command, brief, harness, home, flags);
+    if (values.worktree && harness === 'codex') console.error('tiergear: --worktree ignored: floors are Claude-only');
     if (values.worktree && harness === 'claude') {
       if (launch.warning === null) await writeFloorFile(home, values.worktree, launch.tier, Date.now());
       else console.error('tiergear: no floor written (judge fallback)');

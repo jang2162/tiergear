@@ -24,8 +24,11 @@ export function claudeModelId(model: string): string {
   return CLAUDE_MODEL_IDS[model] ?? model;
 }
 
+// A dated (`claude-haiku-4-5-20251001`) or suffixed (`claude-opus-5-5[1m]`) id names the same model.
 export function claudeAlias(model: string): string {
-  for (const [alias, id] of Object.entries(CLAUDE_MODEL_IDS)) if (id === model) return alias;
+  for (const [alias, id] of Object.entries(CLAUDE_MODEL_IDS)) {
+    if (model === id || model.startsWith(`${id}-`) || model.startsWith(`${id}[`)) return alias;
+  }
   return model;
 }
 

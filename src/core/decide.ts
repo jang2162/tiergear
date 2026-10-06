@@ -1,6 +1,7 @@
 import type { Config } from './config.js';
 import type { FloorRecord } from './floor.js';
 import type { Verdict } from './judge.js';
+import { abridge } from './state.js';
 import { effortFor, firstTarget, type Tables } from './tables.js';
 import { isEffort, isTier, maxTier, stepDown, stepUp, tierRank, type Effort, type Tier } from './tiers.js';
 
@@ -37,6 +38,9 @@ export interface Decision {
 export const JUDGE_FAILURE_LIMIT = 3;
 export const JUDGE_PAUSE_MS = 5 * 60_000;
 export const RECORD_TTL_MS = 7 * 24 * 60 * 60_000;
+// $.store is one JSON file that rejects writes past 4 MiB, so records are capped in count and size.
+export const MAX_RECORDS = 200;
+export const FIRST_PROMPT_CHARS = 2000;
 
 const PIN = /^\s*!pin\b\s*/;
 
@@ -51,7 +55,8 @@ export function stripPin(text: string): string {
 
 export function newRecord(firstPrompt: string, now: number): SessionRecord {
   return {
-    firstPrompt,
+    // The judge only ever sees this many characters of it.
+    firstPrompt: abridge(firstPrompt, FIRST_PROMPT_CHARS),
     tier: null,
     floor: null,
     model: null,
@@ -112,6 +117,11 @@ function appliedFor(model: string | null, tier: Tier, config: Config, tables: Ta
   return model ? { model, effort } : { effort };
 }
 
+// A pinned session runs on its own model and effort: nothing is applied.
+function pinnedHold(record: SessionRecord, confidence: number | null): Decision {
+  return { record: { ...record, applied: null, downStreak: 0 }, change: 'hold', confidence, reason: 'pinned' };
+}
+
 export function decideFirstTurn(input: {
   record: SessionRecord;
   floor: FloorRecord | null;
@@ -120,7 +130,7 @@ export function decideFirstTurn(input: {
   tables: Tables;
 }): Decision {
   const { record, floor, verdict, config, tables } = input;
-  if (record.pinned) return { record, change: 'hold', confidence: null, reason: 'pinned' };
+  if (record.pinned) return pinnedHold(record, null);
   if (floor) {
     const target = firstTarget(tables, 'claude', floor.tier);
     return {
@@ -163,7 +173,7 @@ export function decideNextTurn(input: {
     return { record: { ...record, tier, applied, model: applied.model ?? model, downStreak: 0 }, change, confidence, reason };
   };
 
-  if (record.pinned) return hold('pinned');
+  if (record.pinned) return pinnedHold(record, confidence);
 
   if (record.tier === null) {
     if (!answer || answer.confidence < config.minUpgradeConfidence) return hold(answer ? 'low confidence' : 'no answer');
