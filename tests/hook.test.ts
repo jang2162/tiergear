@@ -421,7 +421,7 @@ describe('user control wins (R18)', () => {
     const paused = fakeHost([{ tier: ['deep', 0.8] }]);
     const a = createTiergear({});
     await a.promptSubmit(paused.host, typed('refactor the parser'));
-    await a.togglePause(paused.host);
+    await a.pause(paused.host);
     expect(paused.store.get('session:s1')).toMatchObject({ pinned: true, firstPrompt: '' });
 
     const manual = fakeHost([{ tier: ['deep', 0.8] }]);
@@ -432,11 +432,11 @@ describe('user control wins (R18)', () => {
     expect(manual.store.get('session:s1')).toMatchObject({ pinned: true, firstPrompt: '' });
   });
 
-  it('clears applied on Pause so the session runs on its own model and effort', async () => {
+  it('clears applied when turned off so the session runs on its own model and effort', async () => {
     const { host, store } = fakeHost([{ tier: ['deep', 0.8] }]);
     const tiergear = createTiergear({});
     await tiergear.promptSubmit(host, typed('refactor the parser'));
-    await tiergear.togglePause(host);
+    await tiergear.pause(host);
     expect(tiergear.applied('s1')).toBeNull();
     expect(store.get('session:s1')).toMatchObject({ pinned: true, applied: null });
     expect(tiergear.statusLine('s1')).toContain('unchanged (paused)');
@@ -519,34 +519,43 @@ describe('band controls', () => {
     expect(store.get('session:s1')).toMatchObject({ tier: 'deep' });
   });
 
-  it('pauses and resumes, the judge back on the next prompt with that prompt as the task', async () => {
+  it('turns off, and a picked tier turns it back on, the judge back on the next prompt with that prompt as the task', async () => {
     const { host, requests } = fakeHost([{ tier: ['deep', 0.8] }, { tier: ['deep', 0.8], stuck: 0 }]);
     const tiergear = createTiergear({});
     await tiergear.promptSubmit(host, typed('refactor the parser'));
-    await tiergear.togglePause(host);
+    await tiergear.pause(host);
     expect(await tiergear.controls(host)).toEqual({ tier: 'deep', paused: true });
     await tiergear.promptSubmit(host, typed('keep going'));
     expect(requests).toHaveLength(1);
-    await tiergear.togglePause(host);
+    await tiergear.pick(host, 'deep');
     expect(await tiergear.controls(host)).toEqual({ tier: 'deep', paused: false });
     expect(tiergear.applied('s1')).toEqual({ model: 'opus', effort: 'xhigh' });
     await tiergear.promptSubmit(host, typed('now the tests'));
     expect(requests).toHaveLength(2);
     expect(JSON.parse(requests[1]!.body).state.task).toBe('now the tests');
     const lines = await tiergear.recent(host, 4);
-    expect(lines[1]).toContain('manual → set deep (resumed)');
+    expect(lines[1]).toContain('manual → set deep (manual tier)');
     expect(lines[3]).toContain('manual → hold deep (paused) · session');
   });
 
-  it("resumes after a manual change on the session's own model, its effort from the tier", async () => {
+  it("turns back on after a manual change on the session's own model, its effort from the picked tier", async () => {
     const { host } = fakeHost([{ tier: ['deep', 0.8] }]);
     const tiergear = createTiergear({});
     await tiergear.promptSubmit(host, typed('refactor the parser'));
     await tiergear.step(host, engineStep('t1'));
     await tiergear.step(host, engineStep('t2', 'claude-sonnet-5-5', 'high'));
     expect(await tiergear.controls(host)).toEqual({ tier: 'deep', paused: true });
-    await tiergear.togglePause(host);
+    await tiergear.pick(host, 'deep');
     expect(tiergear.applied('s1')).toEqual({ model: 'sonnet', effort: 'high' });
+  });
+
+  it('logs nothing new when off is picked again', async () => {
+    const { host } = fakeHost([{ tier: ['deep', 0.8] }]);
+    const tiergear = createTiergear({});
+    await tiergear.promptSubmit(host, typed('refactor the parser'));
+    await tiergear.pause(host);
+    await tiergear.pause(host);
+    expect(await tiergear.recent(host, 10)).toHaveLength(2);
   });
 
   it('reads the controls of a session from the store after a reload', async () => {
@@ -554,7 +563,7 @@ describe('band controls', () => {
     await createTiergear({}).promptSubmit(host, typed('refactor the parser'));
     const reloaded = createTiergear({});
     expect(await reloaded.controls(host)).toEqual({ tier: 'deep', paused: false });
-    await reloaded.togglePause(host);
+    await reloaded.pause(host);
     expect(await reloaded.controls(host)).toEqual({ tier: 'deep', paused: true });
   });
 });
@@ -577,7 +586,7 @@ describe('status for status-line tools', () => {
     const path = statusPath('/home/u', 's1');
     expect(parseStatus(files[path]!)).toMatchObject({ tier: 'deep', model: 'opus', effort: 'xhigh', paused: false, line: 'tiergear · deep 0.80 → opus/xhigh' });
     await tiergear.step(host, engineStep('t1'));
-    await tiergear.togglePause(host);
+    await tiergear.pause(host);
     expect(parseStatus(files[path]!)).toMatchObject({ tier: 'deep', model: 'sonnet', effort: 'medium', paused: true });
   });
 });

@@ -22,7 +22,7 @@ export interface SessionRecord {
   // What turn.step writes on main-loop requests.
   applied: Applied | null;
   downStreak: number;
-  // Paused ([ Pause ] or a manual /model, /effort): nothing is applied and the judge is not asked.
+  // Paused (Tier: off, or a manual /model, /effort): nothing is applied and the judge is not asked.
   pinned: boolean;
   // False only for a record a control made before the session's first prompt.
   started: boolean;
@@ -150,15 +150,6 @@ export function decidePick(input: { record: SessionRecord; tier: Tier; sessionMo
     confidence: null,
     reason: 'manual tier',
   };
-}
-
-export function decideResume(input: { record: SessionRecord; sessionModel: string | null; config: Config; tables: Tables }): Decision {
-  const { record, config, tables } = input;
-  const resumed: SessionRecord = { ...record, pinned: false, downStreak: 0 };
-  if (record.tier === null) return { record: { ...resumed, applied: null }, change: 'hold', confidence: null, reason: 'resumed' };
-  const model = heldModel(record, input.sessionModel);
-  const applied = appliedForTier(record, model, record.tier, config, tables);
-  return { record: { ...resumed, applied, model: applied.model ?? model }, change: 'set', confidence: null, reason: 'resumed' };
 }
 
 export function decideFirstTurn(input: {

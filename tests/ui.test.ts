@@ -90,14 +90,14 @@ describe('band above the prompt', () => {
     const hook = load();
     const { $ } = fakeDollar();
     const parts = await row(hook, $);
-    expect(parts.map((p) => p.type)).toEqual(['Text', 'Select', 'Button', 'Button']);
+    expect(parts.map((p) => p.type)).toEqual(['Text', 'Select', 'Button']);
     expect(parts[0]!.props.children).toBe('tiergear');
-    expect(parts[1]!.props).toMatchObject({ label: 'Tier:', options: ['trivial', 'quick', 'standard', 'deep', 'max'].map((value) => ({ value })) });
+    expect(parts[1]!.props).toMatchObject({ label: 'Tier:', options: ['off', 'trivial', 'quick', 'standard', 'deep', 'max'].map((value) => ({ value })) });
     expect('value' in parts[1]!.props).toBe(false);
-    expect(parts.map((p) => p.props.label)).toEqual([undefined, 'Tier:', 'Pause', 'Recent']);
+    expect(parts.map((p) => p.props.label)).toEqual([undefined, 'Tier:', 'Recent']);
   });
 
-  it('repeats the status line with the tier picker, Pause and a Recent button that opens the pane', async () => {
+  it('repeats the status line with the tier picker and a Recent button that opens the pane', async () => {
     const hook = load();
     const { $, opened } = fakeDollar();
     await decide(hook, $);
@@ -118,25 +118,26 @@ describe('band above the prompt', () => {
     expect(parts[0]!.props.children).toBe('tiergear · quick n/d → opus/low');
   });
 
-  it('pauses and resumes from the band, the picker empty while paused', async () => {
+  it('turns routing off from the picker, and back on with a tier', async () => {
     const hook = load();
     const { $ } = fakeDollar();
     await decide(hook, $);
-    await (labelled(await row(hook, $), 'Pause').props.onPress as () => Promise<void>)();
-    const paused = await row(hook, $);
-    expect('value' in paused[1]!.props).toBe(false);
-    expect(paused[0]!.props.children).toContain('unchanged (paused)');
-    await (labelled(paused, 'Resume').props.onPress as () => Promise<void>)();
-    const resumed = await row(hook, $);
-    expect(resumed[1]!.props.value).toBe('deep');
-    expect(labelled(resumed, 'Pause')).toBeDefined();
+    const select = async (value: string) => ((await row(hook, $))[1]!.props.onSelect as (value: string) => Promise<void>)(value);
+    await select('off');
+    const off = await row(hook, $);
+    expect(off[1]!.props.value).toBe('off');
+    expect(off[0]!.props.children).toContain('unchanged (paused)');
+    await select('deep');
+    const on = await row(hook, $);
+    expect(on[1]!.props.value).toBe('deep');
+    expect(on[0]!.props.children).toBe('tiergear · deep n/d → opus/xhigh');
   });
 
   it('leaves the picker out on a surface that draws none', async () => {
     const hook = load();
     const { $ } = fakeDollar('mobile');
     await decide(hook, $);
-    expect((await row(hook, $)).map((p) => p.props.label)).toEqual([undefined, 'Pause', 'Recent']);
+    expect((await row(hook, $)).map((p) => p.props.label)).toEqual([undefined, 'Recent']);
   });
 
   it('closes the pane on the next press, and opens it again after that', async () => {
@@ -156,7 +157,7 @@ describe('band above the prompt', () => {
     const { $ } = fakeDollar();
     await decide(hook, $);
     const parts = await row(hook, $);
-    expect(parts.map((p) => p.props.label)).toEqual([undefined, 'Tier:', 'Pause']);
+    expect(parts.map((p) => p.props.label)).toEqual([undefined, 'Tier:']);
     expect(parts[0]!.props.children).toBe('tiergear · deep 0.80 → opus/xhigh');
   });
 

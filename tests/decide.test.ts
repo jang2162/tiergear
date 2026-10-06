@@ -7,7 +7,6 @@ import {
   decideNextTurn,
   decidePause,
   decidePick,
-  decideResume,
   newRecord,
   noteJudgeOutcome,
   parseRecord,
@@ -239,19 +238,6 @@ describe('manual controls', () => {
     const d = decidePause(at('deep', { downStreak: 1 }));
     expect(d).toMatchObject({ change: 'hold', reason: 'paused', confidence: null });
     expect(d.record).toMatchObject({ pinned: true, applied: null, downStreak: 0, tier: 'deep' });
-  });
-
-  it("resumes at the tier it had, on the session's own model", () => {
-    const paused = decidePause(at('deep', { model: 'sonnet' })).record;
-    const d = decideResume({ record: paused, sessionModel: 'opus', config, tables });
-    expect(d).toMatchObject({ change: 'set', reason: 'resumed' });
-    expect(d.record).toMatchObject({ pinned: false, tier: 'deep', model: 'opus', applied: { model: 'opus', effort: 'xhigh' } });
-  });
-
-  it('resumes with nothing applied when no tier was decided yet', () => {
-    const d = decideResume({ record: decidePause(newRecord('t', now)).record, sessionModel: null, config, tables });
-    expect(d).toMatchObject({ change: 'hold', reason: 'resumed' });
-    expect(d.record).toMatchObject({ pinned: false, applied: null });
   });
 });
 

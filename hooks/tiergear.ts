@@ -10,7 +10,6 @@ import {
   decideNextTurn,
   decidePause,
   decidePick,
-  decideResume,
   inEffect,
   newRecord,
   noteJudgeOutcome,
@@ -422,14 +421,16 @@ export function createTiergear(options: Readonly<Record<string, unknown>>) {
   }
 
   // The band's controls act on the stored record; a session without one (no prompt yet) starts one.
-  async function control(host: HookHost, what: string, decide: (record: SessionRecord, mem: SessionMemory, tables: Tables) => Decision): Promise<void> {
+  async function control(host: HookHost, what: string, decide: (record: SessionRecord, mem: SessionMemory, tables: Tables) => Decision | null): Promise<void> {
     try {
       const now = await host.clock.now();
       const session = await host.session.id();
       const mem = memory(session);
       const stored = parseRecord(await host.store.get(`session:${session}`));
       const record = stored ?? { ...newRecord('', now), started: false };
-      await commit(host, session, mem, decide(record, mem, await loadTables(host)), now, MANUAL);
+      const decision = decide(record, mem, await loadTables(host));
+      if (decision === null) return;
+      await commit(host, session, mem, decision, now, MANUAL);
       if (stored === null) await pruneRecords(host, now);
     } catch (error) {
       host.ui.log(`[tiergear] ${what} not done: ${errorText(error)}`);
@@ -442,9 +443,8 @@ export function createTiergear(options: Readonly<Record<string, unknown>>) {
     /** A tier picked in the band: applied from the next main-loop request, then moved by the judge as usual. */
     pick: (host: HookHost, tier: Tier): Promise<void> =>
       control(host, 'tier pick', (record, mem, t) => decidePick({ record, tier, sessionModel: mem.sessionModel, config, tables: t })),
-    /** [ Pause ] withdraws everything tiergear applies; [ Resume ] applies the tier again and asks the judge from the next prompt. */
-    togglePause: (host: HookHost): Promise<void> =>
-      control(host, 'pause', (record, mem, t) => (record.pinned ? decideResume({ record, sessionModel: mem.sessionModel, config, tables: t }) : decidePause(record))),
+    /** Tier: off withdraws everything tiergear applies and stops the judge, until a tier is picked. */
+    pause: (host: HookHost): Promise<void> => control(host, 'pause', (record) => (record.pinned ? null : decidePause(record))),
     async controls(host: HookHost): Promise<Controls> {
       try {
         const session = await host.session.id();
@@ -505,7 +505,7 @@ function hostOf($: EngineInterface): HookHost {
 
 const RECENT_PANE = 'tiergear-recent';
 const TIER_PICKER = 'tiergear-tier';
-const PAUSE_BUTTON = 'tiergear-pause';
+const OFF = 'off';
 const RECENT_TITLE = 'tiergear: recent decisions';
 const RECENT_MAX = 50;
 
@@ -538,16 +538,15 @@ export const register: Register = (on: On, options: PluginOptions) => {
         table.Select({
           key: TIER_PICKER,
           label: 'Tier:',
-          options: TIER_ORDER.map((value) => ({ value })),
-          // Paused, no tier is in effect, so none is shown picked.
-          ...(tier !== null && !paused ? { value: tier } : {}),
+          options: [OFF, ...TIER_ORDER].map((value) => ({ value })),
+          ...(paused ? { value: OFF } : tier !== null ? { value: tier } : {}),
           onSelect: async (value) => {
-            if (isTier(value)) await tiergear.pick(hostOf($), value);
+            if (value === OFF) await tiergear.pause(hostOf($));
+            else if (isTier(value)) await tiergear.pick(hostOf($), value);
           },
         }),
       );
     }
-    parts.push(Button({ key: PAUSE_BUTTON, label: paused ? 'Resume' : 'Pause', onPress: () => tiergear.togglePause(hostOf($)) }));
     if (tiergear.config.showRecentButton) {
       parts.push(
         Button({

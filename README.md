@@ -6,8 +6,8 @@ A plugin and CLI that lets a decision model (the judge) pick the model and reaso
 - **Later turns**: by default the model stays and only effort changes. Raising is easy (confidence 0.5); lowering is hard (confidence 0.85 for 2 turns in a row).
 - **Floor**: the tier never drops below one step under the first decision. Sessions started with `tiergear launch`/`orca-spawn` use the launch tier itself as their floor, so a `--min-tier` holds for the whole session.
 - **Ceiling**: a session launched with `--max-tier` never rises above it, whether the judge asks for a harder tier or the session looks stuck.
-- **Pick a tier or pause, from the band**: the band above the prompt has a **Tier** picker and a **[ Pause ]** button (see [Status band](#status-band)). A picked tier is a starting point; the judge keeps moving it as usual. Pause withdraws what tiergear applies until you press **[ Resume ]**.
-- **Manual changes pause routing**: changing the model or effort yourself with `/model` or `/effort` mid-session pauses the session, just like **[ Pause ]**, and writes `[tiergear] manual model/effort change — routing paused for this session` to the hook log once. Press **[ Resume ]** to hand it back to tiergear. It compares the session values the engine reports between turns, so tiergear's own changes don't trigger it. If the engine switches to a fallback model from the first request of a turn, that can also look like a manual change.
+- **Pick a tier, or off, from the band**: the band above the prompt has a **Tier** picker (see [Status band](#status-band)). A picked tier is a starting point; the judge keeps moving it as usual. **off** withdraws what tiergear applies until you pick a tier again.
+- **Manual changes pause routing**: changing the model or effort yourself with `/model` or `/effort` mid-session pauses the session, just like picking **off**, and writes `[tiergear] manual model/effort change — routing paused for this session` to the hook log once. Pick a tier to hand it back to tiergear. It compares the session values the engine reports between turns, so tiergear's own changes don't trigger it. If the engine switches to a fallback model from the first request of a turn, that can also look like a manual change.
 
 If the judge is slow or fails, that turn proceeds untouched.
 
@@ -151,25 +151,24 @@ Change these in `/config` (plugin options).
 
 ## Status band
 
-tiergear shows its state in one line just above the prompt, followed by its controls: `tiergear · deep 0.91 → opus/xhigh  Tier: deep  [ Pause ]  [ Recent ]`. It doesn't use the status line below the prompt; a line an earlier version left there is cleared on the first judged prompt. Before anything is decided the line reads just `tiergear`.
+tiergear shows its state in one line just above the prompt, followed by its controls: `tiergear · deep 0.91 → opus/xhigh  Tier: deep  [ Recent ]`. It doesn't use the status line below the prompt; a line an earlier version left there is cleared on the first judged prompt. Before anything is decided the line reads just `tiergear`.
 
 The line starts with `tiergear ·` and shows the model and effort the session is running on as `model/effort`; a model without effort shows `-`.
 
 - Applied: `tiergear · deep 0.91 → opus/xhigh`.
-- Unchanged: `tiergear · standard 0.62 · sonnet/medium · unchanged (<reason>)`. When tiergear isn't overriding anything (low confidence, a pause), this is the session's own model and effort.
+- Unchanged: `tiergear · standard 0.62 · sonnet/medium · unchanged (<reason>)`. When tiergear isn't overriding anything (low confidence, off), this is the session's own model and effort.
 - The line is set when a prompt is judged, then refreshed with the values the engine reports when the turn starts. Before the session's first turn the values may not be known yet: an unchanged line then leaves them out, and an applied line shows only the effort if tiergear isn't setting the model.
-- `unset` appears when no tier has been decided yet, and `n/d` takes the place of the confidence when the judge gave no answer (as after a pick, a pause or a resume).
+- `unset` appears when no tier has been decided yet, and `n/d` takes the place of the confidence when the judge gave no answer (as after a pick from the band).
 
-Reasons for no change: `no answer` (no judge response), `low confidence`, `same tier`, `paused`, `manual tier` (the first prompt runs on a tier picked before it), `resumed` (resumed before any tier was decided), `at floor` (can't go lower), `at ceiling` (can't go higher than the launch's `--max-tier`), `easier step N/M` (Nth lowering candidate, M needed), `stuck at max`.
+Reasons for no change: `no answer` (no judge response), `low confidence`, `same tier`, `paused` (Tier is off), `manual tier` (the first prompt runs on a tier picked before it), `at floor` (can't go lower), `at ceiling` (can't go higher than the launch's `--max-tier`), `easier step N/M` (Nth lowering candidate, M needed), `stuck at max`.
 
-### Tier picker and Pause
+### Tier picker
 
-- **Tier** (trivial to max): applies the picked tier from the next request, even in the middle of a running turn. Mid-session only the effort changes (from the session model's column in table B), unless `switchModelMidSession` is on. The judge goes on from the picked tier by the usual rules. A pick below the floor lowers the floor to it. A pick may go above a launch's `--max-tier`, but the judge still won't raise past it.
+- **Tier** (off, trivial to max): a tier applies the picked tier from the next request, even in the middle of a running turn. Mid-session only the effort changes (from the session model's column in table B), unless `switchModelMidSession` is on. The judge goes on from the picked tier by the usual rules. A pick below the floor lowers the floor to it. A pick may go above a launch's `--max-tier`, but the judge still won't raise past it.
 - Picked before the first prompt, the tier works like a launch tier: the first turn runs on its table A model and effort without asking the judge, and the judge takes over from the second prompt.
-- Picking a tier also ends a pause.
-- **[ Pause ]** withdraws the model and effort tiergear applies, so the session runs on its own (startup flags, `/model`, `/effort`), and stops asking the judge. While paused the picker shows no tier and the button reads **[ Resume ]**.
-- **[ Resume ]** applies the session's tier again, holding the session's own model and taking the effort from the tier, and asks the judge again from the next prompt. That prompt becomes the task the judge reads.
-- The mobile app draws no picker; Pause and Recent still show there.
+- **off** withdraws the model and effort tiergear applies, so the session runs on its own (startup flags, `/model`, `/effort`), and stops asking the judge. The picker shows `off` until you pick a tier.
+- Picking a tier while off turns tiergear back on at that tier, on the session's own model with the effort from the tier, and the judge is asked again from the next prompt. That prompt becomes the task the judge reads.
+- The mobile app draws no picker, so there is no way to turn tiergear off from it.
 
 ### Recent decisions
 
@@ -180,7 +179,7 @@ Press **[ Recent ]** to open a pane listing this session's decisions, newest fir
 11:16  judge deep 0.52 → up deep (harder step) · opus/xhigh
 ```
 
-Each line is: time, what the judge proposed and its confidence, what tiergear did and the resulting tier (with the reason), and the model/effort tiergear applied (`session` when it applied nothing). `judge skipped` means the judge wasn't asked (a launch floor, a picked tier, a pause, a paused judge); a failure shows its reason, like `judge timeout`. A pick, a pause or a resume from the band reads `manual` instead, as in `manual → set quick (manual tier) · opus/low`. `?` marks an entry logged before the proposal was recorded. The pane reads the decision log, so it still works after a plugin reload; the line comes back with the next judged prompt.
+Each line is: time, what the judge proposed and its confidence, what tiergear did and the resulting tier (with the reason), and the model/effort tiergear applied (`session` when it applied nothing). `judge skipped` means the judge wasn't asked (a launch floor, a picked tier, off, a paused judge); a failure shows its reason, like `judge timeout`. A pick from the band (a tier or off) reads `manual` instead, as in `manual → set quick (manual tier) · opus/low`. `?` marks an entry logged before the proposal was recorded. The pane reads the decision log, so it still works after a plugin reload; the line comes back with the next judged prompt.
 
 ### Status line tools (ccstatusline)
 
@@ -194,7 +193,7 @@ tiergear status [--session <id>] [--json] [--format <template>]
 - Default output: `deep · opus/xhigh`, `paused · sonnet/medium` when paused; nothing (exit 0) when the session has no decision yet, so a widget hides.
 - `--format` fills `{tier}`, `{model}`, `{effort}`, `{state}` (`auto` or `paused`) and `{line}` (the band's text); an unknown value is `-` (`unset` for the tier). `--json` prints the whole record, or `null`.
 
-In [ccstatusline](https://github.com/sirmalloc/ccstatusline), add a **Custom Command** widget with the command `tiergear status` (the CLI must be installed, see [CLI](#cli-optional)). It runs in about 50ms, well within the widget's default 1000ms timeout. The value follows a pick, a pause or a judged prompt at the next status line refresh.
+In [ccstatusline](https://github.com/sirmalloc/ccstatusline), add a **Custom Command** widget with the command `tiergear status` (the CLI must be installed, see [CLI](#cli-optional)). It runs in about 50ms, well within the widget's default 1000ms timeout. The value follows a pick or a judged prompt at the next status line refresh.
 
 ## CLI
 
