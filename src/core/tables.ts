@@ -17,7 +17,9 @@ function column(trivial: Effort | null, quick: Effort | null, standard: Effort |
 
 export const DEFAULT_TABLES: Tables = {
   claude: {
-    models: { trivial: 'haiku', quick: 'sonnet', standard: 'sonnet', deep: 'opus', max: 'fable' },
+    // Not haiku for trivial: auto mode does not run on it, so every command waits for approval.
+    // The haiku column stays so a bypass-permissions user can restore it with one models cell.
+    models: { trivial: 'sonnet', quick: 'sonnet', standard: 'sonnet', deep: 'opus', max: 'fable' },
     effort: {
       haiku: column(null, null, null, null, null),
       sonnet: column('low', 'low', 'medium', 'high', 'max'),

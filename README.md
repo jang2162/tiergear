@@ -49,13 +49,15 @@ All three judges use TypeSafe's `<baseUrl>/v1/systemone` contract. The default i
 
 | Tier | Claude | Codex |
 | --- | --- | --- |
-| trivial | haiku | gpt-5.6-luna |
+| trivial | sonnet | gpt-5.6-luna |
 | quick | sonnet | gpt-5.6-terra |
 | standard | sonnet | gpt-5.6-terra |
 | deep | opus | gpt-5.6-terra |
 | max | fable | gpt-5.6-terra |
 
-**Table B: effort per model** (`-` means no effort is sent)
+Claude's trivial tier uses sonnet, not haiku: Claude Code's auto mode doesn't run on haiku, so a haiku session stops to ask for approval on commands. If you run with permission checks off, see [Haiku for trivial](#haiku-for-trivial-bypass-permissions-users).
+
+**Table B: effort per model** (`-` means no effort is sent; the haiku row applies only if you put haiku in Table A)
 
 | Model | trivial | quick | standard | deep | max |
 | --- | --- | --- | --- | --- | --- |
@@ -68,7 +70,7 @@ All three judges use TypeSafe's `<baseUrl>/v1/systemone` contract. The default i
 
 On Codex, deep and max both use `gpt-5.6-terra`; only the effort differs (xhigh vs max).
 
-A session on a model without effort (haiku) can't be raised through effort alone, so raising the tier switches to that tier's model even when `switchModelMidSession=false` (the cache breaks once).
+A session on a model without effort (haiku, if you set it) can't be raised through effort alone, so raising the tier switches to that tier's model even when `switchModelMidSession=false` (the cache breaks once).
 
 ### Customizing the tables
 
@@ -79,6 +81,27 @@ Put only the cells you want to change in `~/.config/tiergear/tables.json`; they 
 ```
 
 Model cells go under `models`, as in `{"claude":{"models":{"deep":"opus"}}}`. Effort values are low, medium, high, xhigh, max, or `null`. If any value or the JSON itself is invalid, **the whole file is ignored** and the default tables are used (this is noted in the hook log). Hooks read the file once, the first time it's needed after session start, so open a new session after editing it.
+
+### Haiku for trivial (bypass-permissions users)
+
+If you run Claude Code with permission checks off ("yolo" mode), auto mode doesn't matter and haiku is the cheaper choice for trivial work. Put it back with one cell:
+
+```json
+{ "claude": { "models": { "trivial": "haiku" } } }
+```
+
+Permission checks can be turned off in two ways:
+
+- One session: `claude --dangerously-skip-permissions`.
+- Every session, including the workers `orca-spawn` starts: in `~/.claude/settings.json`,
+
+  ```json
+  { "permissions": { "defaultMode": "bypassPermissions" } }
+  ```
+
+Use the settings file if you start workers with tiergear. `tiergear launch` prints a command with only `--model` and `--effort`, `orca-spawn` starts the agent with that command, and inside a Run Orca's `worker-start` builds the command itself, so none of them adds the flag. With only the flag, a haiku worker asks for approval again.
+
+**Bypass mode runs every tool call without asking.** Use it only where you accept that, such as a sandbox or a throwaway worktree.
 
 ## Plugin options
 
@@ -150,7 +173,7 @@ Raw prompt text is never written to the logs.
 
 - Changing the model and changing effort mid-session both invalidate the messages prompt cache (per Anthropic's docs). The first turn has no cache, so it costs nothing.
 - That's why the default mid-session change is effort only, and lowering only happens after repeated high-confidence turns, to keep changes rare.
-- Raising from a model without effort, like haiku, switches the model and breaks the cache once.
+- Raising from a model without effort, like haiku if you set it, switches the model and breaks the cache once.
 - The judge call itself adds cost and latency to every judged prompt (within the timeouts above).
 
 ## Data sent to the judge

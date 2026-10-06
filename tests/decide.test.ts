@@ -15,7 +15,7 @@ import {
 } from '../src/core/decide.js';
 import type { Verdict } from '../src/core/judge.js';
 import { abridge } from '../src/core/state.js';
-import { DEFAULT_TABLES } from '../src/core/tables.js';
+import { DEFAULT_TABLES, mergeTables } from '../src/core/tables.js';
 import type { Tier } from '../src/core/tiers.js';
 
 const now = 1_800_000_000_000;
@@ -53,8 +53,13 @@ describe('decideFirstTurn', () => {
     expect(d.record).toMatchObject({ tier: 'deep', floor: 'standard', model: 'opus', applied: { model: 'opus', effort: 'xhigh' } });
   });
 
-  it('sends no effort for a Haiku tier', () => {
-    expect(first(verdict('trivial', 0.9)).record.applied).toEqual({ model: 'haiku', effort: null });
+  it('starts trivial on sonnet at low effort', () => {
+    expect(first(verdict('trivial', 0.9)).record.applied).toEqual({ model: 'sonnet', effort: 'low' });
+  });
+
+  it('sends no effort when trivial is set back to haiku', () => {
+    const haikuTables = mergeTables(tables, { claude: { models: { trivial: 'haiku' } } })!;
+    expect(first(verdict('trivial', 0.9), { tables: haikuTables }).record.applied).toEqual({ model: 'haiku', effort: null });
   });
 
   it('keeps the session as it is on low confidence or no answer', () => {
@@ -185,7 +190,8 @@ describe('records and status', () => {
   it('describes changes and holds', () => {
     expect(statusText(next(at('quick'), verdict('deep', 0.91)))).toBe('tiergear · deep 0.91 → sonnet/high');
     expect(statusText(next(at('quick'), verdict('quick', 0.62)))).toBe('tiergear · quick 0.62 · unchanged (same tier)');
-    const haiku = decideFirstTurn({ record: newRecord('t', now), floor: null, verdict: verdict('trivial', 0.9), config, tables });
+    const haikuTables = mergeTables(tables, { claude: { models: { trivial: 'haiku' } } })!;
+    const haiku = decideFirstTurn({ record: newRecord('t', now), floor: null, verdict: verdict('trivial', 0.9), config, tables: haikuTables });
     expect(statusText(haiku)).toBe('tiergear · trivial 0.90 → haiku/-');
   });
 });

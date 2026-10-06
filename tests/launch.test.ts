@@ -10,8 +10,8 @@ describe('planLaunch', () => {
   it('uses the confident tier with tables A and B for the chosen harness', async () => {
     const plan = await planLaunch({ ...base, harness: 'codex', judge: judgeSaying({ ok: true, verdict: { tier: { tier: 'deep', confidence: 0.8 }, stuck: null } }) });
     expect(plan).toMatchObject({ tier: 'deep', confidence: 0.8, warning: null, command: 'codex --model gpt-5.6-terra -c model_reasoning_effort="xhigh"' });
-    const haiku = await planLaunch({ ...base, harness: 'claude', judge: judgeSaying({ ok: true, verdict: { tier: { tier: 'trivial', confidence: 0.9 }, stuck: null } }) });
-    expect(haiku.command).toBe('claude --model haiku');
+    const trivial = await planLaunch({ ...base, harness: 'claude', judge: judgeSaying({ ok: true, verdict: { tier: { tier: 'trivial', confidence: 0.9 }, stuck: null } }) });
+    expect(trivial.command).toBe('claude --model sonnet --effort low');
   });
 
   it('falls back to standard with a warning on failure or low confidence', async () => {
