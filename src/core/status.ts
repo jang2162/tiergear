@@ -68,6 +68,10 @@ export function formatStatus(status: StatusRecord, template?: string): string {
       state: status.paused ? 'paused' : 'auto',
       line: status.line,
     };
+    const known: Record<string, boolean> = { tier: status.tier !== null, model: status.model !== null, modelName: status.model !== null, effort: status.effort !== null, state: true, line: true };
+    const keys = [...template.matchAll(/\{(tier|modelName|model|effort|state|line)\}/g)].map((m) => m[1]!);
+    // A template with nothing known in it prints nothing, so its widget hides.
+    if (keys.length > 0 && keys.every((key) => !known[key])) return '';
     return template.replace(/\{(tier|modelName|model|effort|state|line)\}/g, (_, key: string) => values[key]!);
   }
   const effort = status.effort === null ? null : String(status.effort);

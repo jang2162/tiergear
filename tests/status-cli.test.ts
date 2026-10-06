@@ -47,6 +47,23 @@ describe('statusCommand', () => {
     expect(await run(await homeWith())).toBe('');
   });
 
+  it("falls back to the session's own model and effort from stdin before tiergear has any", async () => {
+    const home = await homeWith();
+    const input = stdin(JSON.stringify({ session_id: 'new', model: { id: 'claude-opus-5-5', display_name: 'Opus 5.5' }, effort: { level: 'high' } }));
+    expect(await run(home, { stdin: input, format: 'Model: {modelName}' })).toBe('Model: Opus 5.5');
+    expect(await run(home, { stdin: input, field: 'effort' })).toBe('high');
+    expect(await run(home, { stdin: input, field: 'model' })).toBe('opus');
+    expect(await run(home, { stdin: input, field: 'tier' })).toBe('');
+    expect(await run(home, { stdin: input, format: '({tier})' })).toBe('');
+    expect(await run(home, { stdin: input })).toBe('opus/high');
+  });
+
+  it('fills a value tiergear does not know yet from the session', async () => {
+    const home = await homeWith(record('s1', { model: null, effort: 'xhigh' }));
+    const input = stdin(JSON.stringify({ session_id: 's1', model: { id: 'claude-sonnet-5-5[1m]' }, effort: { level: 'medium' } }));
+    expect(await run(home, { stdin: input })).toBe('deep · sonnet/xhigh');
+  });
+
   it('prints one value when a field is named', async () => {
     const home = await homeWith(record('s1', { paused: true, model: 'sonnet', effort: 'medium' }));
     expect(await run(home, { session: 's1', field: 'model' })).toBe('sonnet');

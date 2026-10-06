@@ -28,7 +28,8 @@ describe('status', () => {
     expect(formatStatus({ ...base, model: 'haiku' }, '{modelName}')).toBe('Haiku 4.5');
     expect(formatStatus({ ...base, model: 'fable' }, '{modelName}')).toBe('Fable 5.1');
     expect(formatStatus({ ...base, model: 'gpt-5.6-terra' }, '{modelName}')).toBe('gpt-5.6-terra');
-    expect(formatStatus({ ...base, model: null }, '{modelName}')).toBe('-');
+    expect(formatStatus({ ...base, model: null }, '{modelName}')).toBe('');
+    expect(formatStatus({ ...base, model: null }, '{modelName} ({tier})')).toBe('- (deep)');
   });
 
   it('gives one value alone, empty when it is not known', () => {

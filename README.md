@@ -197,9 +197,10 @@ tiergear status [tier|state|model|effort] [--session <id>] [--json] [--format <t
 ```
 
 - The session is `--session`, else the `session_id` of the status JSON piped on stdin (what a status line command receives), else the session updated last.
+- Before tiergear has a value for the session (a new session, the first turn), the model and effort come from the status JSON on stdin, the session's own; the tier stays empty. A value tiergear doesn't know yet is filled the same way.
 - Default output: `deep · opus/xhigh`, `paused · sonnet/medium` when paused; nothing (exit 0) when the session has no decision yet, so a widget hides.
 - A field prints that value alone, for a widget of its own: `tiergear status model` prints `opus`, `tiergear status effort` prints `xhigh`, `tiergear status tier` prints `deep`, `tiergear status state` prints `auto` or `paused`. An unknown value prints nothing. A field wins over `--json` and `--format`.
-- `--format` fills `{tier}`, `{model}`, `{modelName}` (as Claude Code names it, `Opus 5.5`), `{effort}`, `{state}` (`auto` or `paused`) and `{line}` (the band's text); an unknown value is `-` (`unset` for the tier). `--json` prints the whole record, or `null`.
+- `--format` fills `{tier}`, `{model}`, `{modelName}` (as Claude Code names it, `Opus 5.5`), `{effort}`, `{state}` (`auto` or `paused`) and `{line}` (the band's text); an unknown value is `-` (`unset` for the tier), and a template with no known value in it prints nothing. `--json` prints the whole record, or `null`.
 
 With the line shown there, turn off `showStatusText` to keep the band to its buttons.
 
