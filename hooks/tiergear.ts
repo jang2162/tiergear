@@ -535,20 +535,27 @@ export const register: Register = (on: On, options: PluginOptions) => {
       const { tier, paused } = await tiergear.controls(hostOf($));
       const chosen = paused ? OFF : tier;
       // One plain button per choice, so a single click picks; the one in effect bracketed at full strength.
-      for (const value of [OFF, ...TIER_ORDER]) {
-        parts.push(
-          Button({
-            key: `tiergear-tier-${value}`,
-            label: value === chosen ? `[${value}]` : value,
-            plain: true,
-            dimColor: value !== chosen,
-            onPress: async () => {
-              if (value === OFF) await tiergear.pause(hostOf($));
-              else if (isTier(value)) await tiergear.pick(hostOf($), value);
-            },
-          }),
-        );
-      }
+      const buttons = [OFF, ...TIER_ORDER].map((value) =>
+        Button({
+          key: `tiergear-tier-${value}`,
+          label: value === chosen ? `[${value}]` : value,
+          plain: true,
+          dimColor: value !== chosen,
+          onPress: async () => {
+            if (value === OFF) await tiergear.pause(hostOf($));
+            else if (isTier(value)) await tiergear.pick(hostOf($), value);
+          },
+        }),
+      );
+      // Fenced off from the line and from Recent: Tier: | off … max |
+      const bar = Text({ dimColor: true, children: '|' });
+      parts.push(
+        Box({
+          flexDirection: 'row',
+          gap: 1,
+          children: [Text({ dimColor: true, children: 'Tier:' }), bar, Box({ flexDirection: 'row', gap: 2, children: buttons }), bar],
+        }),
+      );
     }
     if (showRecentButton) {
       parts.push(

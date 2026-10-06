@@ -75,9 +75,14 @@ async function drawn(hook: (event: string, match?: Record<string, unknown>) => H
   expect(kept).toBe('BELOW');
   expect(rest).toEqual([]);
   expect(row.props.flexDirection).toBe('row');
-  const [line, ...buttons] = [row.props.children].flat() as Element[];
+  const [line, ...after] = leaves(row);
   expect(line!.type).toBe('Text');
-  return { line: line!.props.children, buttons };
+  return { line: line!.props.children, buttons: after.filter((p) => p.type === 'Button') };
+}
+
+// The elements a row draws, in order, nested boxes opened.
+function leaves(element: Element): Element[] {
+  return ([element.props.children].flat() as Element[]).flatMap((child) => (child.type === 'Box' ? leaves(child) : [child]));
 }
 
 const labelled = (buttons: Element[], label: string) => buttons.find((b) => b.props.label === label)!;
@@ -165,14 +170,14 @@ describe('band above the prompt', () => {
     return hook('ui.render', { component: 'AbovePrompt' })($, band(), below);
   }
   const labels = (tree: unknown) =>
-    ([((tree as Element).props.children as Element[])[1]!.props.children].flat() as Element[]).map((p) => (p.type === 'Text' ? 'TEXT' : p.props.label));
+    leaves(((tree as Element).props.children as Element[])[1]!).map((p) => (p.type === 'Text' ? p.props.children : p.props.label));
 
   it('leaves the status text out when it is turned off, as a status line tool shows it', async () => {
-    expect(labels(await rowOf({ showStatusText: false }))).toEqual(['off', 'trivial', 'quick', 'standard', '[deep]', 'max', 'Recent']);
+    expect(labels(await rowOf({ showStatusText: false }))).toEqual(['Tier:', '|', 'off', 'trivial', 'quick', 'standard', '[deep]', 'max', '|', 'Recent']);
   });
 
   it('leaves the tier buttons out when they are turned off', async () => {
-    expect(labels(await rowOf({ showTierButtons: false }))).toEqual(['TEXT', 'Recent']);
+    expect(labels(await rowOf({ showTierButtons: false }))).toEqual(['tiergear · deep 0.80 → opus/xhigh', 'Recent']);
   });
 
   it('draws nothing of its own when every part is turned off', async () => {
