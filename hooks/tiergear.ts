@@ -135,6 +135,7 @@ export function createTiergear(options: Readonly<Record<string, unknown>>) {
     options['judge'] === undefined || isJudgeName(options['judge']) ? null : `[tiergear] unknown judge "${String(options['judge'])}"; using jev`;
   let tables: Tables | null = null;
   const sessions = new Map<string, SessionMemory>();
+  let statusCleared = false;
 
   function memory(session: string): SessionMemory {
     let found = sessions.get(session);
@@ -286,7 +287,11 @@ export function createTiergear(options: Readonly<Record<string, unknown>>) {
       if (first) await pruneRecords(host, now);
       mem.shown = { ...decision, record: saved };
       mem.statusLine = statusText(mem.shown, inEffect(saved.applied, mem.engine));
-      host.ui.status(mem.statusLine);
+      // The band above the prompt shows the line now; clear the one an earlier version left below it.
+      if (!statusCleared) {
+        host.ui.status(undefined);
+        statusCleared = true;
+      }
       await writeLog(host, session, {
         at: now,
         source: 'hook',
@@ -347,7 +352,6 @@ export function createTiergear(options: Readonly<Record<string, unknown>>) {
       if (seen !== null && (seen.model !== model || seen.effort !== effort)) await pauseForManualChange(host, session, mem);
       if (mem.shown) {
         mem.statusLine = statusText(mem.shown, inEffect(mem.applied, { model, effort }));
-        host.ui.status(mem.statusLine);
         host.ui.refresh();
       }
     }
@@ -434,7 +438,13 @@ export const register: Register = (on: On, options: PluginOptions) => {
       gap: 1,
       children: [
         Text({ dimColor: true, children: line }),
-        Button({ label: 'Recent', onPress: () => void $.ui.open({ id: RECENT_PANE, title: RECENT_TITLE }) }),
+        Button({
+          label: 'Recent',
+          onPress: async () => {
+            if ((await $.ui.panes()).some((pane) => pane.id === RECENT_PANE)) await $.ui.close({ id: RECENT_PANE });
+            else await $.ui.open({ id: RECENT_PANE, title: RECENT_TITLE });
+          },
+        }),
       ],
     });
     return Box({ flexDirection: 'column', children: [below, ours] });

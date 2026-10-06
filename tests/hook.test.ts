@@ -88,11 +88,11 @@ describe('stepOverride', () => {
 
 describe('promptSubmit', () => {
   it('decides on the first prompt and applies model and effort from the tables', async () => {
-    const { host, statuses } = fakeHost([{ tier: ['deep', 0.8] }]);
+    const { host } = fakeHost([{ tier: ['deep', 0.8] }]);
     const tiergear = createTiergear({});
     expect(await tiergear.promptSubmit(host, typed('refactor the parser'))).toBe('refactor the parser');
     expect(tiergear.applied('s1')).toEqual({ model: 'opus', effort: 'xhigh' });
-    expect(statuses.at(-1)).toBe('tiergear · deep 0.80 → opus/xhigh');
+    expect(tiergear.statusLine('s1')).toBe('tiergear · deep 0.80 → opus/xhigh');
   });
 
   it('sends context after the first prompt and needs two confident turns to lower', async () => {
@@ -240,42 +240,51 @@ describe('which prompts are judged (R17)', () => {
 
 describe('status line', () => {
   it('shows the model and effort in effect when the tier holds', async () => {
+    const { host } = fakeHost([{ tier: ['deep', 0.8] }, { tier: ['deep', 0.7], stuck: 0.1 }]);
+    const tiergear = createTiergear({});
+    await tiergear.promptSubmit(host, typed('refactor the parser'));
+    await tiergear.step(host, engineStep('t1'));
+    await tiergear.promptSubmit(host, typed('keep going'));
+    expect(tiergear.statusLine('s1')).toBe('tiergear · deep 0.70 · opus/xhigh · unchanged (same tier)');
+  });
+
+  it("fills in the session's own model and effort once its turn starts", async () => {
+    const { host } = fakeHost([{ tier: ['deep', 0.3] }]);
+    const tiergear = createTiergear({});
+    await tiergear.promptSubmit(host, typed('look around'));
+    expect(tiergear.statusLine('s1')).toBe('tiergear · unset 0.30 · unchanged (low confidence)');
+    await tiergear.step(host, engineStep('t1', 'claude-sonnet-5-5', 'medium'));
+    expect(tiergear.statusLine('s1')).toBe('tiergear · unset 0.30 · sonnet/medium · unchanged (low confidence)');
+  });
+
+  it('updates once per turn, not on every step or for subagents', async () => {
+    const { host, session } = fakeHost([{ tier: ['deep', 0.8] }]);
+    const tiergear = createTiergear({});
+    await tiergear.promptSubmit(host, typed('refactor the parser'));
+    await tiergear.step(host, engineStep('t1'));
+    const count = session.refreshes;
+    await tiergear.step(host, engineStep('t1', 'claude-sonnet-5-5', 'medium', 1));
+    await tiergear.step(host, { ...engineStep('t2'), agentId: 'a1' });
+    expect(session.refreshes).toBe(count);
+  });
+
+  it('leaves the line below the prompt empty, clearing one an earlier load left once', async () => {
     const { host, statuses } = fakeHost([{ tier: ['deep', 0.8] }, { tier: ['deep', 0.7], stuck: 0.1 }]);
     const tiergear = createTiergear({});
     await tiergear.promptSubmit(host, typed('refactor the parser'));
     await tiergear.step(host, engineStep('t1'));
     await tiergear.promptSubmit(host, typed('keep going'));
-    expect(statuses.at(-1)).toBe('tiergear · deep 0.70 · opus/xhigh · unchanged (same tier)');
-  });
-
-  it("fills in the session's own model and effort once its turn starts", async () => {
-    const { host, statuses } = fakeHost([{ tier: ['deep', 0.3] }]);
-    const tiergear = createTiergear({});
-    await tiergear.promptSubmit(host, typed('look around'));
-    expect(statuses.at(-1)).toBe('tiergear · unset 0.30 · unchanged (low confidence)');
-    await tiergear.step(host, engineStep('t1', 'claude-sonnet-5-5', 'medium'));
-    expect(statuses.at(-1)).toBe('tiergear · unset 0.30 · sonnet/medium · unchanged (low confidence)');
-  });
-
-  it('updates once per turn, not on every step or for subagents', async () => {
-    const { host, statuses } = fakeHost([{ tier: ['deep', 0.8] }]);
-    const tiergear = createTiergear({});
-    await tiergear.promptSubmit(host, typed('refactor the parser'));
-    await tiergear.step(host, engineStep('t1'));
-    const count = statuses.length;
-    await tiergear.step(host, engineStep('t1', 'claude-sonnet-5-5', 'medium', 1));
-    await tiergear.step(host, { ...engineStep('t2'), agentId: 'a1' });
-    expect(statuses).toHaveLength(count);
+    expect(statuses).toEqual([undefined]);
   });
 
   it("shows the user's own model and effort after a manual change", async () => {
-    const { host, statuses } = fakeHost([{ tier: ['deep', 0.8] }]);
+    const { host } = fakeHost([{ tier: ['deep', 0.8] }]);
     const tiergear = createTiergear({});
     await tiergear.promptSubmit(host, typed('refactor the parser'));
     await tiergear.step(host, engineStep('t1'));
     // Built by hand: engineStep's default would turn an undefined effort into medium.
     await tiergear.step(host, { turnId: 't2', index: 0, model: 'claude-haiku-4-5', messageCount: 1 });
-    expect(statuses.at(-1)).toBe('tiergear · deep 0.80 · haiku/- · unchanged (pinned)');
+    expect(tiergear.statusLine('s1')).toBe('tiergear · deep 0.80 · haiku/- · unchanged (pinned)');
   });
 });
 
@@ -289,11 +298,11 @@ describe('recent decisions', () => {
   });
 
   it('keeps the status line for the band and asks the surfaces to redraw', async () => {
-    const { host, statuses, session } = fakeHost([{ tier: ['deep', 0.8] }]);
+    const { host, session } = fakeHost([{ tier: ['deep', 0.8] }]);
     const tiergear = createTiergear({});
     expect(tiergear.statusLine('s1')).toBeNull();
     await tiergear.promptSubmit(host, typed('refactor the parser'));
-    expect(tiergear.statusLine('s1')).toBe(statuses.at(-1));
+    expect(tiergear.statusLine('s1')).toBe('tiergear · deep 0.80 → opus/xhigh');
     const after = session.refreshes;
     expect(after).toBeGreaterThan(0);
     await tiergear.step(host, engineStep('t1'));
@@ -315,13 +324,13 @@ describe('recent decisions', () => {
 
 describe('user control wins (R18)', () => {
   it('clears applied on !pin so the session runs on its own model and effort', async () => {
-    const { host, store, statuses } = fakeHost([{ tier: ['deep', 0.8] }]);
+    const { host, store } = fakeHost([{ tier: ['deep', 0.8] }]);
     const tiergear = createTiergear({});
     await tiergear.promptSubmit(host, typed('refactor the parser'));
     await tiergear.promptSubmit(host, typed('!pin keep going'));
     expect(tiergear.applied('s1')).toBeNull();
     expect(store.get('session:s1')).toMatchObject({ pinned: true, applied: null });
-    expect(statuses.at(-1)).toContain('unchanged (pinned)');
+    expect(tiergear.statusLine('s1')).toContain('unchanged (pinned)');
     const step = engineStep('t1');
     expect(await tiergear.step(host, step)).toBe(step);
   });

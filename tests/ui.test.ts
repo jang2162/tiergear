@@ -20,6 +20,8 @@ function fakeDollar() {
   const files: Record<string, string> = {};
   const store = new Map<string, unknown>();
   const opened: unknown[] = [];
+  const closed: unknown[] = [];
+  const panes: { id: string }[] = [];
   let clock = 1_800_000_000_000;
   const element = (type: string) => (props: Record<string, unknown>): Element => ({ type, props });
   const $ = {
@@ -47,12 +49,20 @@ function fakeDollar() {
       status: () => {},
       log: () => {},
       invalidate: () => {},
-      open: async (pane: unknown) => void opened.push(pane),
+      open: async (pane: { id: string }) => {
+        opened.push(pane);
+        panes.push({ id: pane.id });
+      },
+      close: async (pane: { id: string }) => {
+        closed.push(pane);
+        panes.splice(panes.findIndex((p) => p.id === pane.id), 1);
+      },
+      panes: async () => [...panes],
       resolve: () => ({ Box: element('Box'), Text: element('Text'), Button: element('Button') }),
     },
     command: { register: async () => {} },
   };
-  return { $, opened };
+  return { $, opened, closed };
 }
 
 const band = (hasSurvey = false) => ({ component: 'AbovePrompt', surface: 'terminal', props: { hasSurvey } });
@@ -79,8 +89,22 @@ describe('band above the prompt', () => {
     const [text, button] = ours.props.children as [Element, Element];
     expect(text.props.children).toBe('tiergear · deep 0.80 → opus/xhigh');
     expect(button.props.label).toBe('Recent');
-    (button.props.onPress as () => void)();
+    await (button.props.onPress as () => Promise<void>)();
     expect(opened).toEqual([{ id: 'tiergear-recent', title: 'tiergear: recent decisions' }]);
+  });
+
+  it('closes the pane on the next press, and opens it again after that', async () => {
+    const hook = load();
+    const { $, opened, closed } = fakeDollar();
+    await decide(hook, $);
+    const tree = (await hook('ui.render', { component: 'AbovePrompt' })($, band(), below)) as Element;
+    const button = ((tree.props.children as [string, Element])[1].props.children as Element[])[1]!;
+    const press = button.props.onPress as () => Promise<void>;
+    await press();
+    await press();
+    expect(closed).toEqual([{ id: 'tiergear-recent' }]);
+    await press();
+    expect(opened).toHaveLength(2);
   });
 
   it('yields to a survey', async () => {

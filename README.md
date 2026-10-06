@@ -122,11 +122,11 @@ Change these in `/config` (plugin options).
 | `firstTurnTimeoutMs` | preset | First-turn latency budget. At most 8000ms (the whole hook budget is 10s, so larger values are cut to 8000) |
 | `turnTimeoutMs` | preset | Later-turn latency budget. At most 8000ms |
 
-## Status line
+## Status band
 
-Every status line starts with `tiergear ·`.
+tiergear shows its state in one line just above the prompt, followed by a **[ Recent ]** button. It doesn't use the status line below the prompt; a line an earlier version left there is cleared on the first judged prompt.
 
-Every line shows the model and effort the session is running on as `model/effort`; a model without effort shows `-`.
+The line starts with `tiergear ·` and shows the model and effort the session is running on as `model/effort`; a model without effort shows `-`.
 
 - Applied: `tiergear · deep 0.91 → opus/xhigh`.
 - Unchanged: `tiergear · standard 0.62 · sonnet/medium · unchanged (<reason>)`. When tiergear isn't overriding anything (low confidence, `!pin`, a manual `/model` or `/effort`), this is the session's own model and effort.
@@ -137,7 +137,7 @@ Reasons for no change: `no answer` (no judge response), `low confidence`, `same 
 
 ### Recent decisions
 
-The status line can't be clicked, so the same line also sits just above the prompt with a **Recent** button. Press it (or run `/tiergear`) to open a pane listing this session's decisions, newest first:
+Press **[ Recent ]** to open a pane listing this session's decisions, newest first, and press it again to close it. `/tiergear` opens the pane too.
 
 ```
 12:11  judge quick 0.44 → hold deep (low confidence) · opus/xhigh
