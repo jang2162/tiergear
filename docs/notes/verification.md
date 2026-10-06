@@ -74,3 +74,17 @@ jev (프리셋 제한: 첫 턴 2000ms): 5개 모두 `ok:true`, tier 모두 해�
 
 - `ok continue`(맥락 없는 첫 턴)는 확신도 0.43으로 minUpgradeConfidence 0.5 미만. 맥락이 없어 예상된 결과.
 - laya/kev: server not running — pending user check (`localhost:11435/api/tags` 무응답, `localhost:8009/v1/systemone` 연결 실패 000).
+
+## 사용자 확인 대기 (Pending user checks)
+
+Task 9의 설치와 실제 세션 확인은 모든 Claude Code 세션에 영향을 주므로(R16) 실행하지 않았다. 아래를 사용자가 직접 수행한다.
+
+1. **타입 재생성**: tiergear 디렉터리의 대화형 세션에서 `/plugin-types`를 실행해 `types/claude-code.d.ts`를 다시 만든다(현재는 2.1.274 임시본). 이후 `npm run typecheck`를 다시 돌린다.
+2. **설치**: `npm run build && npm link`, `ln -s ~/IdeaProjects/tiergear ~/.claude/skills/tiergear`, `claude plugin list | grep -A3 tiergear`. 기대값: `tiergear@skills-dir`, `Status: ✔ loaded`, `which tiergear`가 경로 출력.
+3. **실제 세션 확인** (새 세션에서 순서대로, 상태줄을 이 문서에 기록):
+   1. `README의 제목을 알려줘` → 낮은 tier, 첫 턴이라 모델 변경(예: `→ haiku/-` 또는 `→ sonnet/low`).
+   2. `이 프로젝트에 결제 재시도 큐를 설계해줘` → 높은 tier로 `up`. 모델은 그대로이고 effort만 그 모델 열의 값(haiku였다면 모델이 바뀜).
+   3. `ㅇㅋ 계속` 두 번 → 첫 번은 유지(`easier step 1/2` 또는 `same tier`), 낮아져도 한 단계만.
+   4. `!pin 그대로 진행` → `unchanged (pinned)`.
+   5. `tiergear stats 1`로 기록 확인. `claude --resume`으로 같은 세션을 열어 프롬프트 하나를 보내고 상태줄이 이전 tier에서 이어지는지 확인(`$.store` 유지).
+4. **Laya/Kev**: 두 서버가 실행 중이 아니어서 측정하지 못했다. 서버를 띄운 뒤 `npx tsx scripts/probe-judge.ts laya` 와 `npx tsx scripts/probe-judge.ts kev`로 응답률과 지연을 재고, 필요하면 `/config`에서 `judge`를 바꿔 3-1, 3-2를 반복한다.
