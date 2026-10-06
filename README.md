@@ -126,9 +126,12 @@ Change these in `/config` (plugin options).
 
 Every status line starts with `tiergear ·`.
 
-- Applied: `tiergear · deep 0.91 → opus/xhigh`. When the session model is known it always shows `model/effort`, in the same format even if the model didn't change; a model without effort shows `-`. If the session model isn't known yet, only effort is shown.
+Every line shows the model and effort the session is running on as `model/effort`; a model without effort shows `-`.
+
+- Applied: `tiergear · deep 0.91 → opus/xhigh`.
+- Unchanged: `tiergear · standard 0.62 · sonnet/medium · unchanged (<reason>)`. When tiergear isn't overriding anything (low confidence, `!pin`, a manual `/model` or `/effort`), this is the session's own model and effort.
+- The line is set when a prompt is judged, then refreshed with the values the engine reports when the turn starts. Before the session's first turn the values may not be known yet: an unchanged line then leaves them out, and an applied line shows only the effort if tiergear isn't setting the model.
 - `unset` appears when no tier has been decided yet, and `n/d` takes the place of the confidence when the judge gave no answer.
-- Unchanged: `tiergear · standard 0.62 · unchanged (<reason>)`
 
 Reasons for no change: `no answer` (no judge response), `low confidence`, `same tier`, `pinned`, `at floor` (can't go lower), `easier step N/M` (Nth lowering candidate, M needed), `stuck at max`.
 

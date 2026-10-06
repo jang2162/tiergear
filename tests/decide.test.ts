@@ -194,4 +194,11 @@ describe('records and status', () => {
     const haiku = decideFirstTurn({ record: newRecord('t', now), floor: null, verdict: verdict('trivial', 0.9), config, tables: haikuTables });
     expect(statusText(haiku)).toBe('tiergear · trivial 0.90 → haiku/-');
   });
+
+  it('shows the model and effort in effect, on holds too', () => {
+    const current = { model: 'opus', effort: 'xhigh' };
+    expect(statusText(next(at('quick'), verdict('quick', 0.62)), current)).toBe('tiergear · quick 0.62 · opus/xhigh · unchanged (same tier)');
+    expect(statusText(next(at('quick'), verdict('deep', 0.91)), { model: 'sonnet', effort: 'high' })).toBe('tiergear · deep 0.91 → sonnet/high');
+    expect(statusText(next(at('standard'), null), { model: 'haiku', effort: null })).toBe('tiergear · standard n/d · haiku/- · unchanged (no answer)');
+  });
 });

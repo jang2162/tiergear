@@ -7,6 +7,7 @@ import {
   canAskJudge,
   decideFirstTurn,
   decideNextTurn,
+  inEffect,
   isPinPrompt,
   newRecord,
   noteJudgeOutcome,
@@ -119,6 +120,8 @@ interface SessionMemory {
   sessionModel: string | null;
   // The engine-reported model (alias) and effort of the last main-loop turn seen.
   engine: { turnId: string; model: string; effort: string | number | null } | null;
+  // The last decision on the status line, re-shown with the engine's values when a turn starts.
+  shown: Decision | null;
 }
 
 const REMEMBERED_SESSIONS = 8;
@@ -133,7 +136,7 @@ export function createTiergear(options: Readonly<Record<string, unknown>>) {
   function memory(session: string): SessionMemory {
     let found = sessions.get(session);
     if (!found) {
-      found = { applied: null, failures: EMPTY_TRACKER, sessionModel: null, engine: null };
+      found = { applied: null, failures: EMPTY_TRACKER, sessionModel: null, engine: null, shown: null };
       sessions.set(session, found);
       if (sessions.size > REMEMBERED_SESSIONS) sessions.delete(sessions.keys().next().value!);
     }
@@ -278,7 +281,8 @@ export function createTiergear(options: Readonly<Record<string, unknown>>) {
       mem.applied = saved.applied;
       // Pruned after the save, so the cap counts this session's record as the newest.
       if (first) await pruneRecords(host, now);
-      host.ui.status(statusText({ ...decision, record: saved }));
+      mem.shown = { ...decision, record: saved };
+      host.ui.status(statusText(mem.shown, inEffect(saved.applied, mem.engine)));
       await writeLog(host, session, {
         at: now,
         source: 'hook',
@@ -303,6 +307,7 @@ export function createTiergear(options: Readonly<Record<string, unknown>>) {
   // A change of the engine-reported model or effort between turns is the user's (/model, /effort): routing stops.
   async function pauseForManualChange(host: HookHost, session: string, mem: SessionMemory): Promise<void> {
     mem.applied = null;
+    if (mem.shown) mem.shown = { ...mem.shown, change: 'hold', reason: 'pinned' };
     try {
       const key = `session:${session}`;
       const now = await host.clock.now();
@@ -333,6 +338,7 @@ export function createTiergear(options: Readonly<Record<string, unknown>>) {
     if (seen === null || seen.turnId !== e.turnId) {
       mem.engine = { turnId: e.turnId, model, effort };
       if (seen !== null && (seen.model !== model || seen.effort !== effort)) await pauseForManualChange(host, session, mem);
+      if (mem.shown) host.ui.status(statusText(mem.shown, inEffect(mem.applied, { model, effort })));
     }
     return stepOverride(mem.applied, e);
   }

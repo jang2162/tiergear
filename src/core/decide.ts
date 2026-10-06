@@ -219,10 +219,30 @@ export function appliedText(applied: Applied): string {
   return applied.model ? `${applied.model}/${effort}` : effort;
 }
 
-export function statusText(decision: Decision): string {
+/** The model (alias) and effort a main-loop request actually runs on. */
+export interface InEffect {
+  model: string | null;
+  effort: string | number | null;
+}
+
+// tiergear's override wins over the engine's values; a missing piece is the engine's.
+export function inEffect(applied: Applied | null, engine: InEffect | null): InEffect | null {
+  if (!applied) return engine;
+  return { model: applied.model ?? engine?.model ?? null, effort: applied.effort };
+}
+
+function inEffectText(current: InEffect): string {
+  const effort = current.effort === null ? '-' : String(current.effort);
+  return current.model ? `${current.model}/${effort}` : effort;
+}
+
+export function statusText(decision: Decision, current: InEffect | null = null): string {
   const { record, change, confidence, reason } = decision;
   const tier = record.tier ?? 'unset';
   const said = confidence === null ? 'n/d' : confidence.toFixed(2);
-  if (change === 'hold' || !record.applied) return `tiergear · ${tier} ${said} · unchanged (${reason})`;
-  return `tiergear · ${tier} ${said} → ${appliedText(record.applied)}`;
+  if (change === 'hold' || !record.applied) {
+    const now = current ? ` · ${inEffectText(current)}` : '';
+    return `tiergear · ${tier} ${said}${now} · unchanged (${reason})`;
+  }
+  return `tiergear · ${tier} ${said} → ${current ? inEffectText(current) : appliedText(record.applied)}`;
 }
