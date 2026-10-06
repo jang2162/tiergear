@@ -580,7 +580,7 @@ export const register: Register = (on: On, options: PluginOptions) => {
               },
             }),
       );
-      fenced.push(Box({ flexDirection: 'row', gap: 1, children: [Text({ dimColor: true, children: 'Tier:' }), Box({ flexDirection: 'row', gap: 2, children: choices })] }));
+      fenced.push(Box({ flexDirection: 'row', gap: 1, children: [Text({ children: 'Tier::' }), Box({ flexDirection: 'row', gap: 2, children: choices })] }));
     }
     // The mobile app draws no picker (and no band); the guard keeps the table's type honest.
     if (showFloor && 'Select' in table) {
