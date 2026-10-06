@@ -68,12 +68,16 @@ function fakeDollar() {
 const band = (hasSurvey = false) => ({ component: 'AbovePrompt', surface: 'terminal', props: { hasSurvey } });
 const below = async () => 'BELOW';
 
-// The band's own part: the line, then a row of buttons.
+// The band's own part: one row, the line first and the buttons after it.
 async function drawn(hook: (event: string, match?: Record<string, unknown>) => Hook, $: unknown): Promise<{ line: unknown; buttons: Element[] }> {
   const tree = (await hook('ui.render', { component: 'AbovePrompt' })($, band(), below)) as Element;
-  const [kept, line, row] = tree.props.children as [string, Element, Element];
+  const [kept, row, ...rest] = tree.props.children as [string, Element, ...unknown[]];
   expect(kept).toBe('BELOW');
-  return { line: line.props.children, buttons: [row.props.children].flat() as Element[] };
+  expect(rest).toEqual([]);
+  expect(row.props.flexDirection).toBe('row');
+  const [line, ...buttons] = [row.props.children].flat() as Element[];
+  expect(line!.type).toBe('Text');
+  return { line: line!.props.children, buttons };
 }
 
 const labelled = (buttons: Element[], label: string) => buttons.find((b) => b.props.label === label)!;

@@ -555,7 +555,7 @@ export const register: Register = (on: On, options: PluginOptions) => {
       );
     }
     const line = Text({ dimColor: true, children: tiergear.statusLine(session) ?? 'tiergear' });
-    return Box({ flexDirection: 'column', children: [below, line, Box({ flexDirection: 'row', gap: 2, children: buttons })] });
+    return Box({ flexDirection: 'column', children: [below, Box({ flexDirection: 'row', gap: 2, children: [line, ...buttons] })] });
   });
 
   on('ui.render', { component: 'Pane', requestId: RECENT_PANE }, async ($, e) => {
