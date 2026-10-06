@@ -83,6 +83,9 @@ export function parseVerdict(text: string): Verdict {
   return { tier: readTier(record['tier']), stuck: readNoul(record['stuck']) };
 }
 
+// An answer is a few hundred bytes; anything far larger is not one, and parsing it would only cost time.
+export const MAX_RESPONSE_CHARS = 1_000_000;
+
 /** Jev, Laya (Ollaya) and Kev all serve this contract; a preset only changes the address, model and key. */
 export function createSystemOneJudge(options: SystemOneOptions): Judge {
   return {
@@ -96,6 +99,7 @@ export function createSystemOneJudge(options: SystemOneOptions): Judge {
         async () => {
           const response = await options.transport(endpoint(options.baseUrl), { method: 'POST', headers, body });
           if (!response.ok) throw new Error(`${options.name} responded ${response.status}`);
+          if (response.text.length > MAX_RESPONSE_CHARS) throw new Error('judge response too large');
           return parseVerdict(response.text);
         },
         options.sleep,

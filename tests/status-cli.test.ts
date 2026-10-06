@@ -30,6 +30,16 @@ describe('statusCommand', () => {
     expect(await run(home, { stdin: stdin(input) })).toBe('quick · opus/low');
   });
 
+  it('prints values from files and stdin without control characters, and cut to length', async () => {
+    const home = await homeWith(record('s1', { model: 'opus\u001b]0;pwned\u0007', line: `x\u009b31m${'y'.repeat(500)}` }));
+    for (const out of [await run(home, { session: 's1' }), await run(home, { session: 's1', format: '{model} {line}' }), await run(home, { session: 's1', field: 'model' })]) {
+      expect(out).not.toMatch(/[\u0000-\u001f\u007f-\u009f]/);
+      expect(out.length).toBeLessThan(500);
+    }
+    const input = JSON.stringify({ session_id: 'none', model: { id: 'evil\u001b[2J' }, effort: { level: 'high\u0007' } });
+    expect(await run(home, { stdin: stdin(input) })).toBe('evil[2J/high');
+  });
+
   it('prefers --session to stdin', async () => {
     const home = await homeWith(record('s1'), record('s2', { paused: true, model: 'sonnet', effort: 'medium' }));
     expect(await run(home, { session: 's2', stdin: stdin(JSON.stringify({ session_id: 's1' })) })).toBe('paused · sonnet/medium');

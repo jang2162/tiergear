@@ -37,6 +37,25 @@ function withSession(status: StatusRecord | null, info: SessionInfo | null): Sta
   return { session: info.id ?? '', tier: null, model: info.model, effort: info.effort, paused: false, reason: 'session', line: '', updatedAt: 0 };
 }
 
+// Status files and stdin are read from disk and another program; a status line is a terminal, so no escape gets through.
+const MAX_FIELD_CHARS = 200;
+
+function printable(text: string): string {
+  return text.replace(/[\u0000-\u001f\u007f-\u009f]/g, '').slice(0, MAX_FIELD_CHARS);
+}
+
+function printableStatus(status: StatusRecord | null): StatusRecord | null {
+  if (!status) return null;
+  return {
+    ...status,
+    session: printable(status.session),
+    model: status.model === null ? null : printable(status.model),
+    effort: typeof status.effort === 'string' ? printable(status.effort) : status.effort,
+    reason: printable(status.reason),
+    line: printable(status.line),
+  };
+}
+
 async function readStatus(path: string): Promise<StatusRecord | null> {
   const text = await readFile(path, 'utf8').catch(() => null);
   return text === null ? null : parseStatus(text);
@@ -65,7 +84,7 @@ export async function statusCommand(p: {
   const info = p.session === undefined ? sessionFromStdin(await p.stdin()) : null;
   const session = p.session ?? info?.id;
   const stored = session === undefined ? await newestStatus(p.home) : await readStatus(statusPath(p.home, session));
-  const status = withSession(stored, info);
+  const status = printableStatus(withSession(stored, info));
   if (p.field) return status ? statusField(status, p.field) : '';
   if (p.json) return JSON.stringify(status);
   return status ? formatStatus(status, p.format) : '';

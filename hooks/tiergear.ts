@@ -103,15 +103,21 @@ function settingsEnv(settings: Readonly<Record<string, unknown>>, name: string):
   return typeof value === 'string' && value ? value : undefined;
 }
 
-async function resolveApiKey(host: HookHost, config: Config): Promise<string | undefined> {
-  if (config.judgeApiKey) return config.judgeApiKey;
+// `ignored` names the variable when the only key on offer came from the repository, so the miss can say why.
+async function resolveApiKey(host: HookHost, config: Config): Promise<{ key: string | undefined; ignored: string | null }> {
+  if (config.judgeApiKey) return { key: config.judgeApiKey, ignored: null };
   const preset = JUDGE_PRESETS[config.judge];
-  if (!presetKeyApplies(preset, config.judgeBaseUrl)) return undefined;
-  // A cloned repository's .claude/settings.json can set env too; its key would send prompts to someone else's account.
-  const fromProject = settingsEnv(await host.settings.read({ source: 'project' }), preset.keyEnv);
+  if (!presetKeyApplies(preset, config.judgeBaseUrl)) return { key: undefined, ignored: null };
+  // A cloned repository can commit .claude/settings.json and settings.local.json, and either can set env:
+  // its key would send prompts to someone else's account, so a key from those files is never used.
+  const fromRepo = [
+    settingsEnv(await host.settings.read({ source: 'project' }), preset.keyEnv),
+    settingsEnv(await host.settings.read({ source: 'local' }), preset.keyEnv),
+  ];
   const fromEnv = await host.env.get(preset.keyEnv);
-  if (fromEnv && fromEnv !== fromProject) return fromEnv;
-  return settingsEnv(await host.settings.read({ source: 'user' }), preset.keyEnv) ?? settingsEnv(await host.settings.read({ source: 'local' }), preset.keyEnv);
+  if (fromEnv && !fromRepo.includes(fromEnv)) return { key: fromEnv, ignored: null };
+  const fromUser = settingsEnv(await host.settings.read({ source: 'user' }), preset.keyEnv);
+  return { key: fromUser, ignored: !fromUser && fromEnv ? preset.keyEnv : null };
 }
 
 export function toContext(message: SessionMessageLike): ContextMessage {
@@ -329,9 +335,9 @@ export function createTiergear(options: Readonly<Record<string, unknown>>) {
           noteOutcome({ ok: false, reason: `judge URL ${config.judgeBaseUrl} must be https, or http to localhost` });
           return;
         }
-        const apiKey = await resolveApiKey(host, config);
+        const { key: apiKey, ignored } = await resolveApiKey(host, config);
         if (JUDGE_PRESETS[config.judge].keyRequired && !apiKey) {
-          noteOutcome({ ok: false, reason: `no API key for ${config.judge}` });
+          noteOutcome({ ok: false, reason: ignored ? `${ignored} from this repository's .claude settings ignored` : `no API key for ${config.judge}` });
           return;
         }
         const request = { state: await state(), withStuck, timeoutMs };

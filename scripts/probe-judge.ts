@@ -1,23 +1,11 @@
 import { createSystemOneJudge } from '../src/core/judges/systemone.js';
-import { JUDGE_PRESETS, isJudgeName } from '../src/core/judges/presets.js';
+import { cliJudgeOptions } from '../src/cli/judge.js';
+import { nodeSleep, nodeTransport } from '../src/cli/node.js';
 import { firstTurnState } from '../src/core/state.js';
 
-const name = process.argv[2] ?? 'jev';
-if (!isJudgeName(name)) throw new Error(`unknown judge ${name}`);
-const preset = JUDGE_PRESETS[name];
-
-const judge = createSystemOneJudge({
-  name,
-  baseUrl: process.env['TIERGEAR_JUDGE_URL'] ?? preset.baseUrl,
-  model: process.env['TIERGEAR_JUDGE_MODEL'] ?? preset.model,
-  apiKey: process.env[preset.keyEnv],
-  keyRequired: preset.keyRequired,
-  transport: async (url, init) => {
-    const r = await fetch(url, init);
-    return { status: r.status, ok: r.ok, text: await r.text() };
-  },
-  sleep: (ms) => new Promise((resolve) => setTimeout(resolve, ms).unref()),
-});
+// The CLI's own rules: https or localhost only, and a preset's key only to its own address.
+const options = cliJudgeOptions({ judge: process.argv[2] }, process.env);
+const judge = createSystemOneJudge({ ...options, transport: nodeTransport, sleep: nodeSleep });
 
 const prompts = [
   'what is the version in package.json?',
@@ -30,5 +18,5 @@ const prompts = [
 for (const prompt of prompts) {
   const started = Date.now();
   const result = await judge.ask({ state: firstTurnState(prompt), withStuck: false, timeoutMs: 10_000 });
-  console.log(`${name}\t${Date.now() - started}ms\t${JSON.stringify(result)}\t${prompt}`);
+  console.log(`${options.name}\t${Date.now() - started}ms\t${JSON.stringify(result)}\t${prompt}`);
 }

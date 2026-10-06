@@ -73,6 +73,11 @@ describe('systemone judge', () => {
     expect(await judge(slow, { sleep: async () => {} }).ask({ ...request, timeoutMs: 1200 })).toEqual({ ok: false, reason: 'timed out after 1200ms' });
   });
 
+  it('refuses an oversized response without parsing it', async () => {
+    const huge: Transport = async () => ({ status: 200, ok: true, text: `{"answers":{},"pad":"${'x'.repeat(2_000_000)}"}` });
+    expect(await judge(huge).ask(request)).toEqual({ ok: false, reason: 'judge response too large' });
+  });
+
   it('joins the endpoint without doubling slashes', () => {
     expect(endpoint('http://localhost:8009')).toBe('http://localhost:8009/v1/systemone');
     expect(endpoint('http://localhost:8009//')).toBe('http://localhost:8009/v1/systemone');

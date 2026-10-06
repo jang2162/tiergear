@@ -372,13 +372,28 @@ describe('judge key and address', () => {
     expect(fromSettings.requests).toHaveLength(0);
   });
 
-  it('takes a key from user or local settings', async () => {
+  it('takes a key from user settings or the shell', async () => {
     const user = fakeHost([{ tier: ['deep', 0.8] }], {}, {}, { user: { env: { TYPESAFE_API_KEY: 'mine' } } });
     await createTiergear({}).promptSubmit(user.host, typed('refactor'));
     expect(user.requests[0]!.headers['authorization']).toBe('Bearer mine');
-    const local = fakeHost([{ tier: ['deep', 0.8] }], {}, { TYPESAFE_API_KEY: 'mine' }, { local: { env: { TYPESAFE_API_KEY: 'mine' } } });
-    await createTiergear({}).promptSubmit(local.host, typed('refactor'));
-    expect(local.requests[0]!.headers['authorization']).toBe('Bearer mine');
+    const shell = fakeHost([{ tier: ['deep', 0.8] }], {}, { TYPESAFE_API_KEY: 'mine' });
+    await createTiergear({}).promptSubmit(shell.host, typed('refactor'));
+    expect(shell.requests[0]!.headers['authorization']).toBe('Bearer mine');
+  });
+
+  it("ignores a key from settings.local.json, which a cloned repository can commit too", async () => {
+    const local = { env: { TYPESAFE_API_KEY: 'theirs' } };
+    const fromEnv = fakeHost([{ tier: ['deep', 0.8] }], {}, { TYPESAFE_API_KEY: 'theirs' }, { local, user: { env: { TYPESAFE_API_KEY: 'mine' } } });
+    await createTiergear({}).promptSubmit(fromEnv.host, typed('refactor'));
+    expect(fromEnv.requests[0]!.headers['authorization']).toBe('Bearer mine');
+    const fromSettings = fakeHost([{ tier: ['deep', 0.8] }], {}, { TYPESAFE_API_KEY: 'theirs' }, { local });
+    const tiergear = createTiergear({});
+    await tiergear.promptSubmit(fromSettings.host, typed('refactor'));
+    expect(fromSettings.requests).toHaveLength(0);
+    // Said where the user looks, instead of a bare "no API key".
+    const said = "TYPESAFE_API_KEY from this repository's .claude settings ignored";
+    expect(fromSettings.logs.some((l) => l.includes(said))).toBe(true);
+    expect((await tiergear.recent(fromSettings.host, 5))[0]).toContain(said);
   });
 });
 
