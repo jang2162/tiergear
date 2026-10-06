@@ -4,7 +4,8 @@ A plugin and CLI that lets a decision model (the judge) pick the model and reaso
 
 - **First turn**: the first prompt goes to the judge, which returns a tier (trivial, quick, standard, deep, max). Tables A and B turn that into a model and effort. The first turn has no cache to lose, so the model changes too.
 - **Later turns**: by default the model stays and only effort changes. Raising is easy (confidence 0.5); lowering is hard (confidence 0.85 for 2 turns in a row).
-- **Floor**: the tier never drops below one step under the first decision. Sessions started with `tiergear launch`/`orca-spawn` use the launch tier as their floor.
+- **Floor**: the tier never drops below one step under the first decision. Sessions started with `tiergear launch`/`orca-spawn` use the launch tier itself as their floor, so a `--min-tier` holds for the whole session.
+- **Ceiling**: a session launched with `--max-tier` never rises above it, whether the judge asks for a harder tier or the session looks stuck.
 - **`!pin`**: start a prompt with `!pin` to pin the session. tiergear withdraws the model and effort it was applying, and from then on the session's own model and effort (set by startup flags or `/model`, `/effort`) are used as is. The `!pin` prefix is stripped before the prompt reaches the judge and the model.
 - **Manual changes pause routing**: changing the model or effort yourself with `/model` or `/effort` mid-session stops adjustment for that session, just like `!pin`, and writes `[tiergear] manual model/effort change — routing paused for this session` to the hook log once. It compares the session values the engine reports between turns, so tiergear's own changes don't trigger it. If the engine switches to a fallback model from the first request of a turn, that can also look like a manual change.
 
@@ -159,7 +160,7 @@ The line starts with `tiergear ·` and shows the model and effort the session is
 - The line is set when a prompt is judged, then refreshed with the values the engine reports when the turn starts. Before the session's first turn the values may not be known yet: an unchanged line then leaves them out, and an applied line shows only the effort if tiergear isn't setting the model.
 - `unset` appears when no tier has been decided yet, and `n/d` takes the place of the confidence when the judge gave no answer.
 
-Reasons for no change: `no answer` (no judge response), `low confidence`, `same tier`, `pinned`, `at floor` (can't go lower), `easier step N/M` (Nth lowering candidate, M needed), `stuck at max`.
+Reasons for no change: `no answer` (no judge response), `low confidence`, `same tier`, `pinned`, `at floor` (can't go lower), `at ceiling` (can't go higher than the launch's `--max-tier`), `easier step N/M` (Nth lowering candidate, M needed), `stuck at max`.
 
 ### Recent decisions
 
@@ -175,8 +176,8 @@ Each line is: time, what the judge proposed and its confidence, what tiergear di
 ## CLI
 
 ```bash
-tiergear launch "<brief>" [--agent claude|codex] [--worktree <path>] [--judge jev|laya|kev] [--judge-url <url>] [--judge-model <name>]
-tiergear orca-spawn "<brief>" --name <task> [--agent claude|codex] [--repo <dir>] [--base-branch <ref>] [--judge ...]
+tiergear launch "<brief>" [--agent claude|codex] [--worktree <path>] [--min-tier <tier>] [--max-tier <tier>] [--judge jev|laya|kev] [--judge-url <url>] [--judge-model <name>]
+tiergear orca-spawn "<brief>" --name <task> [--agent claude|codex] [--repo <dir>] [--base-branch <ref>] [--min-tier <tier>] [--max-tier <tier>] [--judge ...]
 tiergear stats [days]
 ```
 
@@ -186,7 +187,9 @@ tiergear stats [days]
   - **Without a Run**: creates a terminal, waits for the agent, then types the brief as is (no preamble, `dispatch` is `null`). If Claude asks whether to trust the folder, **`orca-spawn` does not approve it for you.** Approve it yourself in Orca within 120 seconds. If the agent isn't ready, the brief is **not sent** (exit code 1) and a fallback shell may be left in the worktree.
   - The floor is written before the agent's first prompt in both cases. Without it, the first turn would be judged on Orca's preamble, which usually gives low confidence.
 - `stats`: number of recorded decisions, counts by change type, and response rate and average latency per judge (default 7 days).
-- A floor is written only when the judge actually decided. If the judge failed, didn't answer, or had low confidence and standard was used instead, no floor is written and a warning is printed.
+- `--min-tier <tier>` and `--max-tier <tier>` (either or both; trivial, quick, standard, deep or max) bound the launch. The judge's tier is clamped into the range, and tables A and B pick the model and effort from the clamped tier. The floor written for the session holds the clamped tier as its floor and `--max-tier` as its ceiling, so later turns stay in the range too. An unknown tier or a minimum above the maximum exits 2 before the judge is asked or a worktree is created. With `--agent codex` the range sets the starting tier only (floors are Claude-only), and a one-line note says so.
+- Both commands report the judge's tier beside the one applied. `launch` prints `tiergear: judged <tier>, applied <tier>` on stderr (`judged none` when the judge decided nothing); stdout stays the command alone. `orca-spawn`'s JSON has `tier`, the tier applied after the range, and `judgedTier`, the judge's tier before it (`null` when the judge failed, gave no tier, or had confidence under 0.5).
+- Without a range, a floor is written only when the judge actually decided. If the judge failed, didn't answer, or had low confidence and standard was used instead, no floor is written and a warning is printed. With `--min-tier` or `--max-tier`, standard is clamped into the range and the floor is written anyway, since the range is yours, not the judge's. So with only `--max-tier` and a failed judge, the session's floor is standard (or `--max-tier`, if lower).
 - The CLI's judge timeout is 5000ms.
 
 The CLI can't read plugin options, so it looks up settings from flags, then environment variables, then the preset.
