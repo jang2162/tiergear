@@ -1,0 +1,26 @@
+import { JUDGE_PRESETS, isJudgeName, type JudgeName } from '../core/judges/presets.js';
+
+export interface CliJudgeOptions {
+  name: JudgeName;
+  baseUrl: string;
+  model: string;
+  apiKey: string | undefined;
+  keyRequired: boolean;
+}
+
+// The CLI cannot read the plugin's options, so it takes flags first, then TIERGEAR_* variables, then the preset.
+export function cliJudgeOptions(
+  flags: { judge?: string; url?: string; model?: string },
+  env: Readonly<Record<string, string | undefined>>,
+): CliJudgeOptions {
+  const name = flags.judge ?? env['TIERGEAR_JUDGE'] ?? 'jev';
+  if (!isJudgeName(name)) throw new Error(`unknown judge ${name} (use jev, laya or kev)`);
+  const preset = JUDGE_PRESETS[name];
+  return {
+    name,
+    baseUrl: flags.url ?? env['TIERGEAR_JUDGE_URL'] ?? preset.baseUrl,
+    model: flags.model ?? env['TIERGEAR_JUDGE_MODEL'] ?? preset.model,
+    apiKey: env['TIERGEAR_JUDGE_API_KEY'] || env[preset.keyEnv] || undefined,
+    keyRequired: preset.keyRequired,
+  };
+}
