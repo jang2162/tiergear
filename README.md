@@ -4,7 +4,7 @@
 
 - **첫 턴**: 첫 프롬프트를 판단기에 보내 tier(trivial, quick, standard, deep, max)를 받고, 표 A·B로 모델과 effort를 정합니다. 첫 턴에는 잃을 캐시가 없어 모델도 함께 바뀝니다.
 - **이후 턴**: 기본은 모델을 그대로 두고 effort만 조정합니다. 올리는 것은 쉽고(확신도 0.5), 내리는 것은 어렵습니다(확신도 0.85가 연속 2턴).
-- **바닥선**: 한 번 올라간 뒤에는 첫 판단의 한 단계 아래 밑으로는 내려가지 않습니다. `tiergear launch`/`spawn`으로 띄운 세션은 띄울 때의 tier가 바닥선입니다.
+- **바닥선**: 첫 판단의 한 단계 아래 밑으로는 내려가지 않습니다. `tiergear launch`/`spawn`으로 띄운 세션은 띄울 때의 tier가 바닥선입니다.
 - **`!pin`**: 프롬프트를 `!pin`으로 시작하면 그 세션은 고정되어 더 이상 바뀌지 않습니다(`!pin` 접두어는 판단기와 모델에 가기 전에 제거됩니다).
 
 판단기가 느리거나 실패하면 해당 턴은 건드리지 않고 그대로 진행합니다.
@@ -98,7 +98,8 @@ Codex에서 deep과 max는 같은 `gpt-5.6-terra`를 쓰고 effort만 xhigh, max
 
 모든 상태줄은 `tiergear ·`로 시작합니다.
 
-- 적용: `tiergear · deep 0.91 → opus/xhigh` (첫 턴은 `모델/effort`, 이후는 effort만, effort 없는 모델은 `-`)
+- 적용: `tiergear · deep 0.91 → opus/xhigh` (세션 모델을 알면 항상 `모델/effort`로 표시합니다. 모델이 바뀌지 않아도 같은 형식이고, effort 없는 모델은 `-`입니다. 세션 모델을 아직 모르면 effort만 표시합니다)
+- tier를 아직 정하지 못했으면 `unset`, 판단기 답이 없으면 확신도 자리에 `n/d`가 나옵니다.
 - 유지: `tiergear · standard 0.62 · unchanged (<사유>)`
 
 유지 사유: `no answer`(판단기 응답 없음), `low confidence`, `same tier`, `pinned`, `at floor`(바닥선이라 더 못 내림), `easier step N/M`(내리기 N번째 후보, M번 필요), `stuck at max`.
