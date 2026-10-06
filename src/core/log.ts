@@ -1,4 +1,4 @@
-import type { Applied, Change } from './decide.js';
+import { appliedText, type Applied, type Change } from './decide.js';
 import type { Tier } from './tiers.js';
 
 export interface LogEntry {
@@ -16,6 +16,8 @@ export interface LogEntry {
   ms: number | null;
   applied: Applied | null;
   reason: string;
+  // The tier the judge answered, applied or not; null when it was not asked or failed. Absent in older entries.
+  proposed?: Tier | null;
 }
 
 export const MAX_LOG_LINES = 1000;
@@ -46,4 +48,26 @@ export function parseLogLines(text: string): LogEntry[] {
     }
   }
   return entries;
+}
+
+function clockTime(at: number): string {
+  const d = new Date(at);
+  return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+}
+
+function judgeText(entry: LogEntry): string {
+  if (entry.outcome !== 'ok') return entry.outcome;
+  const said = entry.confidence === null ? 'n/d' : entry.confidence.toFixed(2);
+  return `${entry.proposed === undefined ? '?' : (entry.proposed ?? '-')} ${said}`;
+}
+
+/** One line per decision, newest first: what the judge said, what tiergear did, and what ran. */
+export function recentDecisionLines(text: string, limit: number, time: (at: number) => string = clockTime): string[] {
+  return parseLogLines(text)
+    .slice(-limit)
+    .reverse()
+    .map((e) => {
+      const ran = e.applied ? appliedText(e.applied) : 'session';
+      return `${time(e.at)}  judge ${judgeText(e)} → ${e.change} ${e.tier ?? 'unset'} (${e.reason}) · ${ran}`;
+    });
 }

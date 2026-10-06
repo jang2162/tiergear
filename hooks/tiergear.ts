@@ -23,7 +23,7 @@ import { floorPath, parseFloor, type FloorRecord } from '../src/core/floor.js';
 import type { AskResult, Judge, Verdict } from '../src/core/judge.js';
 import { JUDGE_PRESETS, isJudgeName } from '../src/core/judges/presets.js';
 import { createSystemOneJudge } from '../src/core/judges/systemone.js';
-import { appendLogLine, decisionLogPath, type LogEntry } from '../src/core/log.js';
+import { appendLogLine, decisionLogPath, recentDecisionLines, type LogEntry } from '../src/core/log.js';
 import { firstTurnState, nextTurnState, type ContextMessage } from '../src/core/state.js';
 import { DEFAULT_TABLES, parseTablesFile, tablesPath, type Tables } from '../src/core/tables.js';
 import { claudeAlias, claudeModelId } from '../src/core/tiers.js';
@@ -57,7 +57,8 @@ export interface HookHost {
     ): Promise<{ status: number; ok: boolean; text: string }>;
   };
   clock: { now(): Promise<number>; sleep(ms: number): Promise<void> };
-  ui: { status(text: string | undefined): void; log(text: string): void };
+  // refresh redraws the band and the recent-decisions pane.
+  ui: { status(text: string | undefined): void; log(text: string): void; refresh(): void };
 }
 
 export interface StepLike {
@@ -122,6 +123,8 @@ interface SessionMemory {
   engine: { turnId: string; model: string; effort: string | number | null } | null;
   // The last decision on the status line, re-shown with the engine's values when a turn starts.
   shown: Decision | null;
+  // The text last put on the status line, which the band above the prompt repeats.
+  statusLine: string | null;
 }
 
 const REMEMBERED_SESSIONS = 8;
@@ -136,7 +139,7 @@ export function createTiergear(options: Readonly<Record<string, unknown>>) {
   function memory(session: string): SessionMemory {
     let found = sessions.get(session);
     if (!found) {
-      found = { applied: null, failures: EMPTY_TRACKER, sessionModel: null, engine: null, shown: null };
+      found = { applied: null, failures: EMPTY_TRACKER, sessionModel: null, engine: null, shown: null, statusLine: null };
       sessions.set(session, found);
       if (sessions.size > REMEMBERED_SESSIONS) sessions.delete(sessions.keys().next().value!);
     }
@@ -282,7 +285,8 @@ export function createTiergear(options: Readonly<Record<string, unknown>>) {
       // Pruned after the save, so the cap counts this session's record as the newest.
       if (first) await pruneRecords(host, now);
       mem.shown = { ...decision, record: saved };
-      host.ui.status(statusText(mem.shown, inEffect(saved.applied, mem.engine)));
+      mem.statusLine = statusText(mem.shown, inEffect(saved.applied, mem.engine));
+      host.ui.status(mem.statusLine);
       await writeLog(host, session, {
         at: now,
         source: 'hook',
@@ -297,7 +301,10 @@ export function createTiergear(options: Readonly<Record<string, unknown>>) {
         ms,
         applied: saved.applied,
         reason: decision.reason,
+        proposed: (verdict as Verdict | null)?.tier?.tier ?? null,
       });
+      // After the log line, so an open pane redraws with it.
+      host.ui.refresh();
     } catch (error) {
       host.ui.log(`[tiergear] left the turn alone: ${errorText(error)}`);
     }
@@ -338,7 +345,11 @@ export function createTiergear(options: Readonly<Record<string, unknown>>) {
     if (seen === null || seen.turnId !== e.turnId) {
       mem.engine = { turnId: e.turnId, model, effort };
       if (seen !== null && (seen.model !== model || seen.effort !== effort)) await pauseForManualChange(host, session, mem);
-      if (mem.shown) host.ui.status(statusText(mem.shown, inEffect(mem.applied, { model, effort })));
+      if (mem.shown) {
+        mem.statusLine = statusText(mem.shown, inEffect(mem.applied, { model, effort }));
+        host.ui.status(mem.statusLine);
+        host.ui.refresh();
+      }
     }
     return stepOverride(mem.applied, e);
   }
@@ -351,6 +362,17 @@ export function createTiergear(options: Readonly<Record<string, unknown>>) {
       mem.failures = isError ? recordFailure(mem.failures, failureSignature(tool, text ?? '')) : recordSuccess(mem.failures, tool);
     },
     applied: (session: string): Applied | null => sessions.get(session)?.applied ?? null,
+    statusLine: (session: string): string | null => sessions.get(session)?.statusLine ?? null,
+    async recent(host: HookHost, limit: number): Promise<string[]> {
+      try {
+        const home = await host.env.get('HOME');
+        if (!home) return [];
+        return recentDecisionLines(await host.fs.read(decisionLogPath(home, await host.session.id())), limit);
+      } catch {
+        // No log yet for this session.
+        return [];
+      }
+    },
   };
 }
 
@@ -378,12 +400,55 @@ function hostOf($: EngineInterface): HookHost {
     settings: { read: () => $.settings.read() },
     http: { fetch: (url, init) => $.http.fetch(url, init) },
     clock: { now: () => $.clock.now(), sleep: (ms) => $.clock.sleep(ms) },
-    ui: { status: (t) => $.ui.status(t), log: (t) => $.ui.log(t) },
+    ui: { status: (t) => $.ui.status(t), log: (t) => $.ui.log(t), refresh: () => $.ui.invalidate('ui.render') },
   };
 }
 
+const RECENT_PANE = 'tiergear-recent';
+const RECENT_TITLE = 'tiergear: recent decisions';
+const RECENT_MAX = 50;
+
 export const register: Register = (on: On, options: PluginOptions) => {
   const tiergear = createTiergear(options);
+
+  on('session.start', async ($, e, next) => {
+    await $.command.register({ name: 'tiergear', description: "Show tiergear's recent decisions for this session" });
+    return next(e);
+  });
+
+  on('command.run', { command: 'tiergear' }, async ($) => {
+    await $.ui.open({ id: RECENT_PANE, title: RECENT_TITLE });
+    return { text: 'tiergear: recent decisions opened.' };
+  });
+
+  // The status line itself cannot be pressed, so the band above the prompt repeats it with a button.
+  on('ui.render', { component: 'AbovePrompt' }, async ($, e, next) => {
+    const below = await next(e);
+    if (e.props.hasSurvey) return below;
+    const session = await $.session.id().catch(() => null);
+    const line = session === null ? null : tiergear.statusLine(session);
+    if (line === null) return below;
+    const { Box, Text, Button } = $.ui.resolve(e);
+    const ours = Box({
+      flexDirection: 'row',
+      gap: 1,
+      children: [
+        Text({ dimColor: true, children: line }),
+        Button({ label: 'Recent', onPress: () => void $.ui.open({ id: RECENT_PANE, title: RECENT_TITLE }) }),
+      ],
+    });
+    return Box({ flexDirection: 'column', children: [below, ours] });
+  });
+
+  on('ui.render', { component: 'Pane', requestId: RECENT_PANE }, async ($, e) => {
+    const { Box, Text } = $.ui.resolve(e);
+    const room = Math.min(RECENT_MAX, Math.max(1, (e.viewport?.rows ?? 24) - 4));
+    const lines = await tiergear.recent(hostOf($), room);
+    return Box({
+      flexDirection: 'column',
+      children: lines.length === 0 ? Text({ dimColor: true, children: 'No decisions yet in this session.' }) : lines.map((l) => Text({ children: l })),
+    });
+  });
 
   on('prompt.submit', async ($, e, next) => {
     const text = await tiergear.promptSubmit(hostOf($), e);

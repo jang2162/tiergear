@@ -12,7 +12,7 @@ function fakeHost(replies: Reply[], files: Record<string, string> = {}, env: Rec
   const requests: { url: string; headers: Record<string, string>; body: string }[] = [];
   const statuses: (string | undefined)[] = [];
   const logs: string[] = [];
-  const session = { id: 's1', messageReads: 0 };
+  const session = { id: 's1', messageReads: 0, refreshes: 0 };
   let clock = 1_800_000_000_000;
   const host: HookHost = {
     session: {
@@ -51,7 +51,7 @@ function fakeHost(replies: Reply[], files: Record<string, string> = {}, env: Rec
       },
     },
     clock: { now: async () => (clock += 10), sleep: () => new Promise<void>(() => {}) },
-    ui: { status: (t) => void statuses.push(t), log: (t) => void logs.push(t) },
+    ui: { status: (t) => void statuses.push(t), log: (t) => void logs.push(t), refresh: () => void session.refreshes++ },
   };
   return { host, store, requests, statuses, logs, files, session };
 }
@@ -276,6 +276,40 @@ describe('status line', () => {
     // Built by hand: engineStep's default would turn an undefined effort into medium.
     await tiergear.step(host, { turnId: 't2', index: 0, model: 'claude-haiku-4-5', messageCount: 1 });
     expect(statuses.at(-1)).toBe('tiergear · deep 0.80 · haiku/- · unchanged (pinned)');
+  });
+});
+
+describe('recent decisions', () => {
+  it('logs the tier the judge proposed, even when it is not applied', async () => {
+    const { host, files } = fakeHost([{ tier: ['deep', 0.3] }]);
+    const tiergear = createTiergear({});
+    await tiergear.promptSubmit(host, typed('look around'));
+    const log = Object.entries(files).find(([p]) => p.includes('/decisions/'))![1];
+    expect(JSON.parse(log.trim())).toMatchObject({ tier: null, proposed: 'deep', confidence: 0.3, reason: 'low confidence' });
+  });
+
+  it('keeps the status line for the band and asks the surfaces to redraw', async () => {
+    const { host, statuses, session } = fakeHost([{ tier: ['deep', 0.8] }]);
+    const tiergear = createTiergear({});
+    expect(tiergear.statusLine('s1')).toBeNull();
+    await tiergear.promptSubmit(host, typed('refactor the parser'));
+    expect(tiergear.statusLine('s1')).toBe(statuses.at(-1));
+    const after = session.refreshes;
+    expect(after).toBeGreaterThan(0);
+    await tiergear.step(host, engineStep('t1'));
+    expect(session.refreshes).toBeGreaterThan(after);
+  });
+
+  it("lists this session's decisions newest first", async () => {
+    const { host } = fakeHost([{ tier: ['deep', 0.8] }, { tier: ['quick', 0.4], stuck: 0.1 }]);
+    const tiergear = createTiergear({});
+    expect(await tiergear.recent(host, 10)).toEqual([]);
+    await tiergear.promptSubmit(host, typed('refactor the parser'));
+    await tiergear.promptSubmit(host, typed('ok'));
+    const lines = await tiergear.recent(host, 10);
+    expect(lines).toHaveLength(2);
+    expect(lines[0]).toContain('judge quick 0.40 → hold deep (low confidence) · opus/xhigh');
+    expect(lines[1]).toContain('judge deep 0.80 → set deep');
   });
 });
 

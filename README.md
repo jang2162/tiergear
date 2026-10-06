@@ -135,6 +135,17 @@ Every line shows the model and effort the session is running on as `model/effort
 
 Reasons for no change: `no answer` (no judge response), `low confidence`, `same tier`, `pinned`, `at floor` (can't go lower), `easier step N/M` (Nth lowering candidate, M needed), `stuck at max`.
 
+### Recent decisions
+
+The status line can't be clicked, so the same line also sits just above the prompt with a **Recent** button. Press it (or run `/tiergear`) to open a pane listing this session's decisions, newest first:
+
+```
+12:11  judge quick 0.44 → hold deep (low confidence) · opus/xhigh
+11:16  judge deep 0.52 → up deep (harder step) · opus/xhigh
+```
+
+Each line is: time, what the judge proposed and its confidence, what tiergear did and the resulting tier (with the reason), and the model/effort tiergear applied (`session` when it applied nothing). `judge skipped` means the judge wasn't asked (a launch floor, `!pin`, a paused judge); a failure shows its reason, like `judge timeout`. `?` marks an entry logged before the proposal was recorded. The pane reads the decision log, so it still works after a plugin reload; the band comes back with the next judged prompt.
+
 ## CLI
 
 ```bash
