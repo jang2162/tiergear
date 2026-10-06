@@ -6,8 +6,8 @@ A plugin and CLI that lets a decision model (the judge) pick the model and reaso
 - **Later turns**: by default the model stays and only effort changes. Raising is easy (confidence 0.5); lowering is hard (confidence 0.85 for 2 turns in a row).
 - **Floor**: the tier never drops below one step under the first decision. Sessions started with `tiergear launch`/`orca-spawn` use the launch tier itself as their floor, so a `--min-tier` holds for the whole session.
 - **Ceiling**: a session launched with `--max-tier` never rises above it, whether the judge asks for a harder tier or the session looks stuck.
-- **`!pin`**: start a prompt with `!pin` to pin the session. tiergear withdraws the model and effort it was applying, and from then on the session's own model and effort (set by startup flags or `/model`, `/effort`) are used as is. The `!pin` prefix is stripped before the prompt reaches the judge and the model.
-- **Manual changes pause routing**: changing the model or effort yourself with `/model` or `/effort` mid-session stops adjustment for that session, just like `!pin`, and writes `[tiergear] manual model/effort change — routing paused for this session` to the hook log once. It compares the session values the engine reports between turns, so tiergear's own changes don't trigger it. If the engine switches to a fallback model from the first request of a turn, that can also look like a manual change.
+- **Pick a tier or pause, from the band**: the band above the prompt has a **Tier** picker and a **[ Pause ]** button (see [Status band](#status-band)). A picked tier is a starting point; the judge keeps moving it as usual. Pause withdraws what tiergear applies until you press **[ Resume ]**.
+- **Manual changes pause routing**: changing the model or effort yourself with `/model` or `/effort` mid-session pauses the session, just like **[ Pause ]**, and writes `[tiergear] manual model/effort change — routing paused for this session` to the hook log once. Press **[ Resume ]** to hand it back to tiergear. It compares the session values the engine reports between turns, so tiergear's own changes don't trigger it. If the engine switches to a fallback model from the first request of a turn, that can also look like a manual change.
 
 If the judge is slow or fails, that turn proceeds untouched.
 
@@ -151,16 +151,25 @@ Change these in `/config` (plugin options).
 
 ## Status band
 
-tiergear shows its state in one line just above the prompt, followed by a **[ Recent ]** button. It doesn't use the status line below the prompt; a line an earlier version left there is cleared on the first judged prompt.
+tiergear shows its state in one line just above the prompt, followed by its controls: `tiergear · deep 0.91 → opus/xhigh  Tier: deep  [ Pause ]  [ Recent ]`. It doesn't use the status line below the prompt; a line an earlier version left there is cleared on the first judged prompt. Before anything is decided the line reads just `tiergear`.
 
 The line starts with `tiergear ·` and shows the model and effort the session is running on as `model/effort`; a model without effort shows `-`.
 
 - Applied: `tiergear · deep 0.91 → opus/xhigh`.
-- Unchanged: `tiergear · standard 0.62 · sonnet/medium · unchanged (<reason>)`. When tiergear isn't overriding anything (low confidence, `!pin`, a manual `/model` or `/effort`), this is the session's own model and effort.
+- Unchanged: `tiergear · standard 0.62 · sonnet/medium · unchanged (<reason>)`. When tiergear isn't overriding anything (low confidence, a pause), this is the session's own model and effort.
 - The line is set when a prompt is judged, then refreshed with the values the engine reports when the turn starts. Before the session's first turn the values may not be known yet: an unchanged line then leaves them out, and an applied line shows only the effort if tiergear isn't setting the model.
-- `unset` appears when no tier has been decided yet, and `n/d` takes the place of the confidence when the judge gave no answer.
+- `unset` appears when no tier has been decided yet, and `n/d` takes the place of the confidence when the judge gave no answer (as after a pick, a pause or a resume).
 
-Reasons for no change: `no answer` (no judge response), `low confidence`, `same tier`, `pinned`, `at floor` (can't go lower), `at ceiling` (can't go higher than the launch's `--max-tier`), `easier step N/M` (Nth lowering candidate, M needed), `stuck at max`.
+Reasons for no change: `no answer` (no judge response), `low confidence`, `same tier`, `paused`, `manual tier` (the first prompt runs on a tier picked before it), `resumed` (resumed before any tier was decided), `at floor` (can't go lower), `at ceiling` (can't go higher than the launch's `--max-tier`), `easier step N/M` (Nth lowering candidate, M needed), `stuck at max`.
+
+### Tier picker and Pause
+
+- **Tier** (trivial to max): applies the picked tier from the next request, even in the middle of a running turn. Mid-session only the effort changes (from the session model's column in table B), unless `switchModelMidSession` is on. The judge goes on from the picked tier by the usual rules. A pick below the floor lowers the floor to it. A pick may go above a launch's `--max-tier`, but the judge still won't raise past it.
+- Picked before the first prompt, the tier works like a launch tier: the first turn runs on its table A model and effort without asking the judge, and the judge takes over from the second prompt.
+- Picking a tier also ends a pause.
+- **[ Pause ]** withdraws the model and effort tiergear applies, so the session runs on its own (startup flags, `/model`, `/effort`), and stops asking the judge. While paused the picker shows no tier and the button reads **[ Resume ]**.
+- **[ Resume ]** applies the session's tier again, holding the session's own model and taking the effort from the tier, and asks the judge again from the next prompt. That prompt becomes the task the judge reads.
+- The mobile app draws no picker; Pause and Recent still show there.
 
 ### Recent decisions
 
@@ -171,7 +180,21 @@ Press **[ Recent ]** to open a pane listing this session's decisions, newest fir
 11:16  judge deep 0.52 → up deep (harder step) · opus/xhigh
 ```
 
-Each line is: time, what the judge proposed and its confidence, what tiergear did and the resulting tier (with the reason), and the model/effort tiergear applied (`session` when it applied nothing). `judge skipped` means the judge wasn't asked (a launch floor, `!pin`, a paused judge); a failure shows its reason, like `judge timeout`. `?` marks an entry logged before the proposal was recorded. The pane reads the decision log, so it still works after a plugin reload; the band comes back with the next judged prompt.
+Each line is: time, what the judge proposed and its confidence, what tiergear did and the resulting tier (with the reason), and the model/effort tiergear applied (`session` when it applied nothing). `judge skipped` means the judge wasn't asked (a launch floor, a picked tier, a pause, a paused judge); a failure shows its reason, like `judge timeout`. A pick, a pause or a resume from the band reads `manual` instead, as in `manual → set quick (manual tier) · opus/low`. `?` marks an entry logged before the proposal was recorded. The pane reads the decision log, so it still works after a plugin reload; the line comes back with the next judged prompt.
+
+### Status line tools (ccstatusline)
+
+Claude Code's status JSON reports the session's own model and effort, not what tiergear applies per request, so a status line built from it misses tiergear's changes. The hook writes what the band shows to `~/.local/state/tiergear/status/<session>.json`, and `tiergear status` prints it:
+
+```bash
+tiergear status [--session <id>] [--json] [--format <template>]
+```
+
+- The session is `--session`, else the `session_id` of the status JSON piped on stdin (what a status line command receives), else the session updated last.
+- Default output: `deep · opus/xhigh`, `paused · sonnet/medium` when paused; nothing (exit 0) when the session has no decision yet, so a widget hides.
+- `--format` fills `{tier}`, `{model}`, `{effort}`, `{state}` (`auto` or `paused`) and `{line}` (the band's text); an unknown value is `-` (`unset` for the tier). `--json` prints the whole record, or `null`.
+
+In [ccstatusline](https://github.com/sirmalloc/ccstatusline), add a **Custom Command** widget with the command `tiergear status` (the CLI must be installed, see [CLI](#cli-optional)). It runs in about 50ms, well within the widget's default 1000ms timeout. The value follows a pick, a pause or a judged prompt at the next status line refresh.
 
 ## CLI
 
@@ -179,6 +202,7 @@ Each line is: time, what the judge proposed and its confidence, what tiergear di
 tiergear launch "<brief>" [--agent claude|codex] [--worktree <path>] [--min-tier <tier>] [--max-tier <tier>] [--judge jev|laya|kev] [--judge-url <url>] [--judge-model <name>]
 tiergear orca-spawn "<brief>" --name <task> [--agent claude|codex] [--repo <dir>] [--base-branch <ref>] [--min-tier <tier>] [--max-tier <tier>] [--judge ...]
 tiergear stats [days]
+tiergear status [--session <id>] [--json] [--format <template>]
 ```
 
 - `launch`: judges the brief and prints the command to run (e.g. `claude --model opus --effort xhigh`). With Claude, `--worktree` writes a floor for that path. The path is stored as an absolute real path (symlinks resolved), so a relative path still works for a session opened in that folder. With `--agent codex`, floors are Claude-only, so none is written and a one-line note is printed instead.
@@ -187,6 +211,7 @@ tiergear stats [days]
   - **Without a Run**: creates a terminal, waits for the agent, then types the brief as is (no preamble, `dispatch` is `null`). If Claude asks whether to trust the folder, **`orca-spawn` does not approve it for you.** Approve it yourself in Orca within 120 seconds. If the agent isn't ready, the brief is **not sent** (exit code 1) and a fallback shell may be left in the worktree.
   - The floor is written before the agent's first prompt in both cases. Without it, the first turn would be judged on Orca's preamble, which usually gives low confidence.
 - `stats`: number of recorded decisions, counts by change type, and response rate and average latency per judge (default 7 days).
+- `status`: what a session runs on now, for status line tools; see [Status line tools](#status-line-tools-ccstatusline).
 - `--min-tier <tier>` and `--max-tier <tier>` (either or both; trivial, quick, standard, deep or max) bound the launch. The judge's tier is clamped into the range, and tables A and B pick the model and effort from the clamped tier. The floor written for the session holds the clamped tier as its floor and `--max-tier` as its ceiling, so later turns stay in the range too. An unknown tier or a minimum above the maximum exits 2 before the judge is asked or a worktree is created. With `--agent codex` the range sets the starting tier only (floors are Claude-only), and a one-line note says so.
 - Both commands report the judge's tier beside the one applied. `launch` prints `tiergear: judged <tier>, applied <tier>` on stderr (`judged none` when the judge decided nothing); stdout stays the command alone. `orca-spawn`'s JSON has `tier`, the tier applied after the range, and `judgedTier`, the judge's tier before it (`null` when the judge failed, gave no tier, or had confidence under 0.5).
 - Without a range, a floor is written only when the judge actually decided. If the judge failed, didn't answer, or had low confidence and standard was used instead, no floor is written and a warning is printed. With `--min-tier` or `--max-tier`, standard is clamped into the range and the floor is written anyway, since the range is yours, not the judge's. So with only `--max-tier` and a failed judge, the session's floor is standard (or `--max-tier`, if lower).
@@ -208,7 +233,8 @@ The CLI can't read plugin options, so it looks up settings from flags, then envi
 | Tables | `~/.config/tiergear/tables.json` |
 | Floors (valid 24 hours) | `~/.local/state/tiergear/floors/<fnv1a(worktree)>.json` |
 | Decision log (1000 lines per file) | `~/.local/state/tiergear/decisions/<name>.jsonl` |
-| Session records (kept 7 days, newest 200) | Plugin `$.store` under `session:<id>` (the first prompt is truncated to 2000 characters, and dropped once a session is pinned) |
+| Status for status line tools (one small file per session) | `~/.local/state/tiergear/status/<session>.json` |
+| Session records (kept 7 days, newest 200) | Plugin `$.store` under `session:<id>` (the first prompt is truncated to 2000 characters, and dropped while a session is paused) |
 
 Raw prompt text is never written to the logs.
 

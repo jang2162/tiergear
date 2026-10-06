@@ -87,8 +87,10 @@ Task 9의 설치와 실제 세션 확인은 모든 Claude Code 세션에 영향�
    1. `README의 제목을 알려줘` → 낮은 tier, 첫 턴이라 모델 변경(예: `→ haiku/-` 또는 `→ sonnet/low`).
    2. `이 프로젝트에 결제 재시도 큐를 설계해줘` → 높은 tier로 `up`. 모델은 그대로이고 effort만 그 모델 열의 값(haiku였다면 모델이 바뀜).
    3. `ㅇㅋ 계속` 두 번 → 첫 번은 유지(`easier step 1/2` 또는 `same tier`), 낮아져도 한 단계만.
-   4. `!pin 그대로 진행` → `unchanged (pinned)`. 이후 요청은 세션 자체의 모델과 effort로 나간다.
-   5. 새 세션에서 첫 판단 뒤 `/model`이나 `/effort`로 직접 바꾸고 프롬프트를 보내면 hook 로그에 `manual model/effort change — routing paused for this session`이 한 번 남고 이후 `unchanged (pinned)`.
+   4. 띠의 **[ Pause ]** 를 누른다 → `unchanged (paused)`, 버튼이 **[ Resume ]** 으로 바뀌고 Tier 선택이 비어 보인다. 이후 요청은 세션 자체의 모델과 effort로 나간다. **[ Resume ]** 을 누르면 그 tier의 effort로 돌아간다.
+   4-1. 띠의 **Tier** 에서 다른 tier를 고른다 → 실행 중인 턴이어도 다음 요청부터 그 effort로 나가고, Recent에 `manual → set <tier> (manual tier)`가 남는다. 새 세션에서 첫 프롬프트 전에 고르면 첫 턴은 판단기 없이 그 tier의 표 A 모델·effort로 나간다.
+   4-2. ccstatusline에 Custom Command 위젯 `tiergear status`를 넣고, 위 4·4-1을 할 때 값이 따라 바뀌는지 본다.
+   5. 새 세션에서 첫 판단 뒤 `/model`이나 `/effort`로 직접 바꾸고 프롬프트를 보내면 hook 로그에 `manual model/effort change — routing paused for this session`이 한 번 남고 이후 `unchanged (paused)`, 버튼은 **[ Resume ]**.
    5-1. 긴 대화에서 자동 압축(auto-compaction)이 일어난 뒤에도 `routing paused`가 뜨지 않는지 확인한다. 엔진 내부 요청이 다른 모델이나 effort로 `turn.step`에 들어오면 수동 변경으로 오인할 수 있다.
    6. hook 계약 두 가지(alias 재작성 허용 여부, effort 생략 시 유지 여부)를 실제 요청으로 확인한다(위 2번).
    7. `tiergear stats 1`로 기록 확인. `claude --resume`으로 같은 세션을 열어 프롬프트 하나를 보내고 상태줄이 이전 tier에서 이어지는지 확인(`$.store` 유지).
