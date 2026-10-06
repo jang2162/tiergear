@@ -4,7 +4,9 @@ import type { Harness } from '../core/tiers.js';
 import { appendDecision, readDecisions, readTables, writeFloorFile } from './files.js';
 import { cliJudgeOptions } from './judge.js';
 import { planLaunch, type LaunchPlan } from './launch.js';
+import { createOrcaExec } from './orca.js';
 import { homeDir, nodeSleep, nodeTransport } from './node.js';
+import { spawnWorker } from './spawn.js';
 import { summarize } from './stats.js';
 
 export const USAGE = `usage:
@@ -23,21 +25,25 @@ async function plan(
   const judge = createSystemOneJudge({ ...options, transport: nodeTransport, sleep: nodeSleep });
   const result = await planLaunch({ brief, harness, judge, tables: await readTables(home), now: Date.now });
   if (result.warning) console.error(`tiergear: ${result.warning}`);
-  await appendDecision(home, `cli-${new Date().toISOString().slice(0, 10)}`, {
-    at: Date.now(),
-    source: 'cli',
-    session: command,
-    phase: 'launch',
-    judge: options.name,
-    tier: result.tier,
-    change: 'set',
-    confidence: result.confidence,
-    stuck: null,
-    outcome: result.outcome,
-    ms: result.ms,
-    applied: { model: result.target.model, effort: result.target.effort },
-    reason: command,
-  });
+  try {
+    await appendDecision(home, `cli-${new Date().toISOString().slice(0, 10)}`, {
+      at: Date.now(),
+      source: 'cli',
+      session: command,
+      phase: 'launch',
+      judge: options.name,
+      tier: result.tier,
+      change: 'set',
+      confidence: result.confidence,
+      stuck: null,
+      outcome: result.outcome,
+      ms: result.ms,
+      applied: { model: result.target.model, effort: result.target.effort },
+      reason: command,
+    });
+  } catch (error) {
+    console.error(`tiergear: decision log not written: ${error instanceof Error ? error.message : String(error)}`);
+  }
   return result;
 }
 
@@ -74,11 +80,35 @@ export async function main(argv: string[]): Promise<number> {
 
   if (command === 'launch') {
     const launch = await plan(command, brief, harness, home, flags);
-    if (values.worktree && harness === 'claude') await writeFloorFile(home, values.worktree, launch.tier, Date.now());
+    if (values.worktree && harness === 'claude') {
+      if (launch.warning === null) await writeFloorFile(home, values.worktree, launch.tier, Date.now());
+      else console.error('tiergear: no floor written (judge fallback)');
+    }
     console.log(launch.command);
     return 0;
   }
 
-  console.error('tiergear: spawn is not available yet');
-  return 2;
+  if (!values.name) {
+    console.error(USAGE);
+    return 2;
+  }
+  const spawnPlan = await plan(command, brief, harness, home, flags);
+  const result = await spawnWorker({
+    brief,
+    name: values.name,
+    harness,
+    repoDir: values.repo ?? process.cwd(),
+    plan: spawnPlan,
+    orca: createOrcaExec(),
+    writeFloor: async (path) => {
+      if (spawnPlan.warning === null) await writeFloorFile(home, path, spawnPlan.tier, Date.now());
+      else console.error('tiergear: no floor written (judge fallback)');
+    },
+    log: (line) => console.error(`tiergear: ${line}`),
+  });
+  if (result.status === 'not-started') {
+    console.error('tiergear: the agent did not become ready; the brief was not sent. A fallback shell may remain in the worktree.');
+  }
+  console.log(JSON.stringify({ ...result, tier: spawnPlan.tier, command: spawnPlan.command }));
+  return result.status === 'sent' ? 0 : 1;
 }
