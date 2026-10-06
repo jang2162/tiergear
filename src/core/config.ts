@@ -24,6 +24,8 @@ export interface Config {
   showConfidence: boolean;
   showModelEffort: boolean;
   showReason: boolean;
+  // A lower tier the judge is at least this sure of applies at once, without the downgrade streak; null: off.
+  instantSwitchConfidence: number | null;
 }
 
 // A hook has 10s; the judge gets at most 8s of it so the rest of the hook still fits.
@@ -69,6 +71,7 @@ export function resolveConfig(options: Readonly<Record<string, unknown>>): Confi
     showConfidence: options['showConfidence'] !== false,
     showModelEffort: options['showModelEffort'] !== false,
     showReason: options['showReason'] !== false,
+    instantSwitchConfidence: null,
   };
   for (const key of NUMBER_KEYS) {
     const value = options[key];
@@ -76,6 +79,8 @@ export function resolveConfig(options: Readonly<Record<string, unknown>>): Confi
   }
   config.firstTurnTimeoutMs = Math.min(config.firstTurnTimeoutMs, MAX_JUDGE_TIMEOUT_MS);
   config.turnTimeoutMs = Math.min(config.turnTimeoutMs, MAX_JUDGE_TIMEOUT_MS);
+  const instant = options['instantSwitchConfidence'];
+  if (typeof instant === 'number' && Number.isFinite(instant) && instant > 0) config.instantSwitchConfidence = instant;
   const apiKey = text(options, 'judgeApiKey');
   if (apiKey) config.judgeApiKey = apiKey;
   return config;

@@ -235,6 +235,12 @@ export function decideNextTurn(input: {
   const stuck = (verdict?.stuck ?? 0) >= config.stuckConfidence || input.repeatedFailures >= config.stuckFailures;
   if (stuck) return current === 'max' ? hold('stuck at max') : raise(stepUp(current), 'stuck');
 
+  // A judge sure enough for the instant switch lowers at once, straight to its tier, never under the floor.
+  if (answer && tierRank(answer.tier) < tierRank(current) && config.instantSwitchConfidence !== null && answer.confidence >= config.instantSwitchConfidence) {
+    const lower = maxTier(answer.tier, record.floor);
+    return lower === current ? hold('at floor') : move(lower, 'down', 'instant switch');
+  }
+
   // Lowering needs a confident judge on consecutive turns, so one terse follow-up cannot drop the tier.
   if (answer && tierRank(answer.tier) < tierRank(current) && answer.confidence >= config.minDowngradeConfidence) {
     const streak = record.downStreak + 1;

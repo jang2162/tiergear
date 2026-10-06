@@ -117,6 +117,20 @@ describe('decideNextTurn', () => {
     expect(two.record.applied).toEqual({ model: 'sonnet', effort: 'medium' });
   });
 
+  it('lowers at once to the tier asked, above the floor, when the judge is sure enough for the instant switch', () => {
+    const instant = { ...config, instantSwitchConfidence: 0.95 };
+    const sure = next(at('max', { floor: 'quick' }), verdict('trivial', 0.97), 0, instant);
+    expect(sure).toMatchObject({ change: 'down', reason: 'instant switch' });
+    expect(sure.record.tier).toBe('quick');
+    expect(next(at('max', { floor: 'trivial' }), verdict('standard', 0.97), 0, instant).record.tier).toBe('standard');
+    expect(next(at('deep'), verdict('trivial', 0.9), 0, instant).change).toBe('hold');
+    expect(next(at('quick', { floor: 'quick' }), verdict('trivial', 0.99), 0, instant).reason).toBe('at floor');
+  });
+
+  it('needs the streak as before when the instant switch is off', () => {
+    expect(next(at('deep'), verdict('trivial', 0.99)).change).toBe('hold');
+  });
+
   it('breaks the streak on an unconfident or non-lower turn', () => {
     const one = next(at('deep'), verdict('quick', 0.9));
     expect(next(one.record, verdict('quick', 0.7)).record.downStreak).toBe(0);

@@ -23,7 +23,14 @@ describe('resolveConfig', () => {
       showConfidence: true,
       showModelEffort: true,
       showReason: true,
+      instantSwitchConfidence: null,
     });
+  });
+
+  it('turns the instant switch on only for a confidence above 0', () => {
+    expect(resolveConfig({ instantSwitchConfidence: 0.95 }).instantSwitchConfidence).toBe(0.95);
+    expect(resolveConfig({ instantSwitchConfidence: 0 }).instantSwitchConfidence).toBeNull();
+    expect(resolveConfig({ instantSwitchConfidence: '0.9' }).instantSwitchConfidence).toBeNull();
   });
 
   it('hides the Recent button only when the option is false', () => {

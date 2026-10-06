@@ -3,7 +3,7 @@
 A plugin and CLI that lets a decision model (the judge) pick the model and reasoning effort for Claude Code sessions and Orca workers.
 
 - **First turn**: the first prompt goes to the judge, which returns a tier (trivial, quick, standard, deep, max). Tables A and B turn that into a model and effort. The first turn has no cache to lose, so the model changes too.
-- **Later turns**: by default the model stays and only effort changes. Raising is easy (confidence 0.5); lowering is hard (confidence 0.85 for 2 turns in a row).
+- **Later turns**: by default the model stays and only effort changes. Raising is easy (confidence 0.5); lowering is hard (confidence 0.85 for 2 turns in a row), unless the optional instant switch is on and the judge is sure enough.
 - **Floor**: the tier never drops below one step under the first decision. Sessions started with `tiergear launch`/`orca-spawn` use the launch tier itself as their floor, so a `--min-tier` holds for the whole session.
 - **Ceiling**: a session launched with `--max-tier` never rises above it, whether the judge asks for a harder tier or the session looks stuck.
 - **Pick a tier, or off, from the band**: the band above the prompt has a button per tier and one for **off** (see [Status band](#status-band)). A picked tier is a starting point; the judge keeps moving it as usual. **off** withdraws what tiergear applies until you pick a tier again.
@@ -140,10 +140,11 @@ Change these in `/config` (plugin options).
 | `judgeModel` | preset | Leave empty for the preset's model |
 | `judgeApiKey` | preset env var | Leave empty to use TYPESAFE_API_KEY, OLLAYA_API_KEY, or KEV_API_KEY, which only go to the preset's own address (sensitive) |
 | `switchModelMidSession` | `false` | Also change the model after the first turn (breaks the prompt cache). Off: only effort changes |
-| `minUpgradeConfidence` | `0.5` | Minimum confidence to raise the tier |
-| `minDowngradeConfidence` | `0.85` | Minimum confidence for a turn to count toward lowering |
+| `instantSwitchConfidence` | off | Confidence · instant switch: a lower tier the judge is at least this sure of applies at once, straight to that tier (never under the floor), skipping `downgradeStreak`. Leave unset or 0 to keep it off |
+| `minDowngradeConfidence` | `0.85` | Confidence · lower: minimum confidence for a turn to count toward lowering |
+| `minUpgradeConfidence` | `0.5` | Confidence · raise: minimum confidence to raise the tier |
+| `stuckConfidence` | `0.6` | Confidence · stuck: raise one step when the judge's stuck probability is at or above this |
 | `downgradeStreak` | `2` | Consecutive turns needed to lower one step |
-| `stuckConfidence` | `0.6` | Raise one step when the judge's stuck probability is at or above this |
 | `stuckFailures` | `3` | Raise one step after this many identical tool failures in a row |
 | `firstTurnTimeoutMs` | preset | First-turn latency budget. At most 8000ms (the whole hook budget is 10s, so larger values are cut to 8000) |
 | `turnTimeoutMs` | preset | Later-turn latency budget. At most 8000ms |
