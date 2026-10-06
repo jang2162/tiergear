@@ -1,12 +1,18 @@
 import { describe, expect, it } from 'vitest';
-import type { LaunchPlan } from '../src/cli/launch.js';
+import { planLaunch, type LaunchPlan } from '../src/cli/launch.js';
 import { OrcaError, type OrcaExec } from '../src/cli/orca.js';
 import { briefProblem, spawnWorker, type SpawnParams } from '../src/cli/spawn.js';
+import type { AskResult } from '../src/core/judge.js';
+import { DEFAULT_TABLES } from '../src/core/tables.js';
+import type { TierRange } from '../src/core/tiers.js';
 
 const plan: LaunchPlan = {
-  tier: 'deep', confidence: 0.8, target: { model: 'opus', effort: 'xhigh' },
-  command: 'claude --model opus --effort xhigh', warning: null, outcome: 'ok', ms: 300,
+  tier: 'deep', judgedTier: 'deep', confidence: 0.8, target: { model: 'opus', effort: 'xhigh' },
+  command: 'claude --model opus --effort xhigh', warning: null, outcome: 'ok', ms: 300, floor: { tier: 'deep' },
 };
+
+const planned = (result: AskResult, range: TierRange) =>
+  planLaunch({ brief: 'review the diff', harness: 'claude', judge: { name: 'jev', ask: async () => result }, tables: DEFAULT_TABLES, now: () => 0, range });
 
 const receipt = {
   ok: true,
@@ -131,6 +137,36 @@ describe('spawnWorker with a bound run', () => {
     const { exec, calls } = fakeOrca([], { run: 'run_1' });
     await run(exec);
     expect(calls.some((c) => c.args[0] === 'terminal')).toBe(false);
+  });
+});
+
+describe('spawnWorker with a tier range', () => {
+  it.each([null, 'run_1'])('floors the clamped tier and the ceiling and starts the agent at that tier (run: %s)', async (bound) => {
+    const { exec, calls } = fakeOrca([true], { run: bound });
+    const floors: unknown[] = [];
+    const ranged = await planned({ ok: true, verdict: { tier: { tier: 'quick', confidence: 0.9 }, stuck: null } }, { min: 'standard', max: 'deep' });
+    await run(exec, { plan: ranged, writeFloor: async (path, floor) => void floors.push([path, floor]) });
+    expect(floors).toEqual([['/w/task', { tier: 'standard', ceiling: 'deep' }]]);
+    const start = calls.find((c) => c.args[1] === 'worker-start' || (c.args[0] === 'terminal' && c.args[1] === 'create'))!.args;
+    expect(start.join(' ')).toContain(bound ? '--model sonnet --effort medium' : 'claude --model sonnet --effort medium');
+  });
+
+  it.each([null, 'run_1'])('floors the range even when the judge failed (run: %s)', async (bound) => {
+    const { exec } = fakeOrca([true], { run: bound });
+    const floors: unknown[] = [];
+    const ranged = await planned({ ok: false, reason: 'offline' }, { min: 'deep' });
+    await run(exec, { plan: ranged, writeFloor: async (path, floor) => void floors.push([path, floor]) });
+    expect(floors).toEqual([['/w/task', { tier: 'deep' }]]);
+  });
+
+  it('writes no floor after a judge fallback without a range, and says so', async () => {
+    const { exec } = fakeOrca([true]);
+    const floors: string[] = [];
+    const logs: string[] = [];
+    const fallback = await planned({ ok: false, reason: 'offline' }, {});
+    await run(exec, { plan: fallback, writeFloor: async (p) => void floors.push(p), log: (l) => void logs.push(l) });
+    expect(floors).toEqual([]);
+    expect(logs).toContain('no floor written (judge fallback)');
   });
 });
 

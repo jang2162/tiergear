@@ -1,18 +1,19 @@
 import { parseArgs } from 'node:util';
 import { createSystemOneJudge } from '../core/judges/systemone.js';
-import type { Harness } from '../core/tiers.js';
+import type { Harness, TierRange } from '../core/tiers.js';
 import { appendDecision, readDecisions, readTables, writeFloorFile } from './files.js';
 import { cliJudgeOptions } from './judge.js';
-import { planLaunch, type LaunchPlan } from './launch.js';
+import { parseTierRange, planLaunch, type LaunchPlan } from './launch.js';
 import { createOrcaExec } from './orca.js';
 import { homeDir, nodeSleep, nodeTransport } from './node.js';
 import { briefProblem, spawnWorker } from './spawn.js';
 import { summarize } from './stats.js';
 
 export const USAGE = `usage:
-  tiergear launch "<brief>" [--agent claude|codex] [--worktree <path>] [--judge jev|laya|kev] [--judge-url <url>] [--judge-model <name>]
-  tiergear orca-spawn "<brief>" --name <task> [--agent claude|codex] [--repo <dir>] [--base-branch <ref>] [--judge ...]
-  tiergear stats [days]`;
+  tiergear launch "<brief>" [--agent claude|codex] [--worktree <path>] [--min-tier <tier>] [--max-tier <tier>] [--judge jev|laya|kev] [--judge-url <url>] [--judge-model <name>]
+  tiergear orca-spawn "<brief>" --name <task> [--agent claude|codex] [--repo <dir>] [--base-branch <ref>] [--min-tier <tier>] [--max-tier <tier>] [--judge ...]
+  tiergear stats [days]
+  <tier> is one of trivial|quick|standard|deep|max`;
 
 async function plan(
   command: string,
@@ -20,10 +21,11 @@ async function plan(
   harness: Harness,
   home: string,
   flags: { judge?: string; url?: string; model?: string },
+  range: TierRange,
 ): Promise<LaunchPlan> {
   const options = cliJudgeOptions(flags, process.env);
   const judge = createSystemOneJudge({ ...options, transport: nodeTransport, sleep: nodeSleep });
-  const result = await planLaunch({ brief, harness, judge, tables: await readTables(home), now: Date.now });
+  const result = await planLaunch({ brief, harness, judge, tables: await readTables(home), now: Date.now, range });
   if (result.warning) console.error(`tiergear: ${result.warning}`);
   try {
     await appendDecision(home, `cli-${new Date().toISOString().slice(0, 10)}`, {
@@ -61,6 +63,8 @@ export async function main(argv: string[]): Promise<number> {
       judge: { type: 'string' },
       'judge-url': { type: 'string' },
       'judge-model': { type: 'string' },
+      'min-tier': { type: 'string' },
+      'max-tier': { type: 'string' },
     },
   });
   const home = homeDir();
@@ -78,12 +82,22 @@ export async function main(argv: string[]): Promise<number> {
     return 2;
   }
   const flags = { judge: values.judge, url: values['judge-url'], model: values['judge-model'] };
+  const parsedRange = parseTierRange(values['min-tier'], values['max-tier']);
+  if (!parsedRange.ok) {
+    console.error(`tiergear: ${parsedRange.error}`);
+    return 2;
+  }
+  const { range } = parsedRange;
+  const ranged = range.min !== undefined || range.max !== undefined;
 
   if (command === 'launch') {
-    const launch = await plan(command, brief, harness, home, flags);
-    if (values.worktree && harness === 'codex') console.error('tiergear: --worktree ignored: floors are Claude-only');
+    const launch = await plan(command, brief, harness, home, flags, range);
+    // stdout carries only the command, so the tiers go to stderr.
+    console.error(`tiergear: judged ${launch.judgedTier ?? 'none'}, applied ${launch.tier}`);
+    if (harness === 'codex' && values.worktree) console.error('tiergear: --worktree ignored: floors are Claude-only');
+    else if (harness === 'codex' && ranged) console.error('tiergear: the tier range sets the start only: floors are Claude-only');
     if (values.worktree && harness === 'claude') {
-      if (launch.warning === null) await writeFloorFile(home, values.worktree, launch.tier, Date.now());
+      if (launch.floor) await writeFloorFile(home, values.worktree, launch.floor, Date.now());
       else console.error('tiergear: no floor written (judge fallback)');
     }
     console.log(launch.command);
@@ -99,7 +113,8 @@ export async function main(argv: string[]): Promise<number> {
     console.error(`tiergear: ${problem}`);
     return 2;
   }
-  const spawnPlan = await plan(command, brief, harness, home, flags);
+  const spawnPlan = await plan(command, brief, harness, home, flags, range);
+  if (harness === 'codex' && ranged) console.error('tiergear: the tier range sets the start only: floors are Claude-only');
   const result = await spawnWorker({
     brief,
     name: values.name,
@@ -108,15 +123,14 @@ export async function main(argv: string[]): Promise<number> {
     baseBranch: values['base-branch'],
     plan: spawnPlan,
     orca: createOrcaExec(),
-    writeFloor: async (path) => {
-      if (spawnPlan.warning === null) await writeFloorFile(home, path, spawnPlan.tier, Date.now());
-      else console.error('tiergear: no floor written (judge fallback)');
+    writeFloor: async (path, floor) => {
+      await writeFloorFile(home, path, floor, Date.now());
     },
     log: (line) => console.error(`tiergear: ${line}`),
   });
   if (result.status === 'not-started') {
     console.error('tiergear: the agent did not become ready; the brief was not sent. A fallback shell may remain in the worktree.');
   }
-  console.log(JSON.stringify({ ...result, tier: spawnPlan.tier, command: spawnPlan.command }));
+  console.log(JSON.stringify({ ...result, tier: spawnPlan.tier, judgedTier: spawnPlan.judgedTier, command: spawnPlan.command }));
   return result.status === 'sent' ? 0 : 1;
 }

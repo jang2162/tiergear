@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { claudeAlias, claudeModelId, isEffort, isTier, launchCommand, maxTier, stepDown, stepUp, tierRank } from '../src/core/tiers.js';
+import { clampTier, claudeAlias, claudeModelId, isEffort, isTier, launchCommand, maxTier, stepDown, stepUp, tierRank } from '../src/core/tiers.js';
 
 describe('tiers', () => {
   it('orders tiers and steps one at a time, stopping at the ends', () => {
@@ -15,6 +15,13 @@ describe('tiers', () => {
     expect(maxTier('quick', 'standard')).toBe('standard');
     expect(maxTier('deep', 'standard')).toBe('deep');
     expect(maxTier('quick', null)).toBe('quick');
+  });
+
+  it('clamps a tier into a range with either bound', () => {
+    expect(clampTier('quick', { min: 'deep' })).toBe('deep');
+    expect(clampTier('max', { max: 'standard' })).toBe('standard');
+    expect(clampTier('standard', { min: 'quick', max: 'deep' })).toBe('standard');
+    expect(clampTier('trivial', {})).toBe('trivial');
   });
 
   it('recognizes tiers and efforts', () => {

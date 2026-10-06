@@ -56,6 +56,18 @@ export function maxTier(a: Tier, b: Tier | null): Tier {
   return b !== null && tierRank(b) > tierRank(a) ? b : a;
 }
 
+// The bounds a person put on a launch (`--min-tier`, `--max-tier`); either may be left out.
+export interface TierRange {
+  min?: Tier;
+  max?: Tier;
+}
+
+export function clampTier(tier: Tier, range: TierRange): Tier {
+  if (range.min && tierRank(tier) < tierRank(range.min)) return range.min;
+  if (range.max && tierRank(tier) > tierRank(range.max)) return range.max;
+  return tier;
+}
+
 export function launchCommand(harness: Harness, target: Target): string {
   // Tables admit only id characters, so quoting is needed just to keep a shell from globbing `[1m]`.
   const model = /^[A-Za-z0-9._:/-]+$/.test(target.model) ? target.model : `'${target.model}'`;

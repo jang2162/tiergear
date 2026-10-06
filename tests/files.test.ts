@@ -11,8 +11,14 @@ import { DEFAULT_TABLES, tablesPath } from '../src/core/tables.js';
 describe('files', () => {
   it('writes a floor the hook can read back', async () => {
     const home = await mkdtemp(join(tmpdir(), 'tiergear-'));
-    const path = await writeFloorFile(home, '/w/task/', 'deep', 1000);
-    expect(parseFloor(await readFile(path, 'utf8'), '/w/task', 1000)).toMatchObject({ tier: 'deep' });
+    const path = await writeFloorFile(home, '/w/task/', { tier: 'deep' }, 1000);
+    expect(parseFloor(await readFile(path, 'utf8'), '/w/task', 1000)).toEqual({ worktree: '/w/task', tier: 'deep', createdAt: 1000 });
+  });
+
+  it('writes the ceiling into the floor', async () => {
+    const home = await mkdtemp(join(tmpdir(), 'tiergear-'));
+    const path = await writeFloorFile(home, '/w/task', { tier: 'quick', ceiling: 'standard' }, 1000);
+    expect(parseFloor(await readFile(path, 'utf8'), '/w/task', 1000)).toMatchObject({ tier: 'quick', ceiling: 'standard' });
   });
 
   it('resolves a worktree to its absolute real path, or the resolved path when it does not exist', async () => {
@@ -24,14 +30,14 @@ describe('files', () => {
   it('writes the same floor file for a relative worktree as for its absolute path', async () => {
     const home = await mkdtemp(join(tmpdir(), 'tiergear-'));
     const dir = await mkdtemp(join(tmpdir(), 'tiergear-wt-'));
-    const fromRelative = await writeFloorFile(home, relative(process.cwd(), dir), 'deep', 1000);
-    expect(await writeFloorFile(home, dir, 'deep', 1000)).toBe(fromRelative);
+    const fromRelative = await writeFloorFile(home, relative(process.cwd(), dir), { tier: 'deep' }, 1000);
+    expect(await writeFloorFile(home, dir, { tier: 'deep' }, 1000)).toBe(fromRelative);
   });
 
   it('writes a floor the hook finds from the same HOME and cwd', async () => {
     const home = await mkdtemp(join(tmpdir(), 'tiergear-home-'));
     const worktree = await mkdtemp(join(tmpdir(), 'tiergear-wt-'));
-    await writeFloorFile(home, relative(process.cwd(), worktree), 'deep', Date.now());
+    await writeFloorFile(home, relative(process.cwd(), worktree), { tier: 'deep' }, Date.now());
     let judgeCalls = 0;
     const store = new Map<string, unknown>();
     const host: HookHost = {

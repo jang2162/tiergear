@@ -1,5 +1,5 @@
 import type { Harness } from '../core/tiers.js';
-import type { LaunchPlan } from './launch.js';
+import type { LaunchFloor, LaunchPlan } from './launch.js';
 import {
   OrcaError,
   findAgentHandle,
@@ -24,7 +24,7 @@ export interface SpawnParams {
   baseBranch?: string;
   plan: LaunchPlan;
   orca: OrcaExec;
-  writeFloor: (worktreePath: string) => Promise<void>;
+  writeFloor: (worktreePath: string, floor: LaunchFloor) => Promise<void>;
   log: (line: string) => void;
 }
 
@@ -51,7 +51,10 @@ export async function spawnWorker(p: SpawnParams): Promise<SpawnResult> {
   const worktree = parseWorktree(await p.orca(['worktree', 'create', '--name', p.name, '--no-parent', ...base], p.repoDir));
   p.log(`worktree ${worktree.path}`);
   // The floor must exist before the agent reads its first prompt, which worker-start sends itself.
-  if (p.harness === 'claude') await p.writeFloor(worktree.path);
+  if (p.harness === 'claude') {
+    if (p.plan.floor) await p.writeFloor(worktree.path, p.plan.floor);
+    else p.log('no floor written (judge fallback)');
+  }
 
   const selector = `id:${worktree.id}`;
   if (runId) {
