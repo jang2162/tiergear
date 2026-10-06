@@ -2,20 +2,23 @@
 
 확인일: 2026-10-06. 설치된 Claude Code 2.1.290, Codex CLI 0.157.1, Orca 1.4.220.
 
-## 1. hook 타입 파일 (주의: 임시본)
+## 1. hook 타입 파일
 
-- `claude -p "/plugin-types"`는 비대화형에서 실행되지 않았다("이 세션에 설치되어 있지 않음" 응답). 선언 파일이 만들어지지 않았다.
-- `types/claude-code.d.ts`는 **2.1.274 임시본**이다(첫 줄 `// Written by Claude Code 2.1.274.`). 브리프의 기대값은 2.1.289 이상이므로 **사용자가 tiergear 디렉터리의 대화형 세션에서 `/plugin-types`를 실행해 다시 만들어야 한다.** 재생성 후 아래 2번 항목을 다시 확인한다.
+- Task 0 당시 `claude -p "/plugin-types"`는 비대화형에서 실행되지 않아 2.1.274 임시본을 썼다.
+- 최종 수정 라운드(2026-10-06)에서 Claude Code 2.1.289 번들의 `plugin-authoring/types/claude-code.d.ts`로 교체했다(첫 줄 `// Written by Claude Code 2.1.289.`). 교체 후 `npm run typecheck`는 수정 없이 통과했다. 2.1.289부터는 엔진이 플러그인을 불러올 때 `.claude-plugin/types/claude-code/index.d.ts`에 같은 파일을 써 준다.
 
-## 2. hook 계약 (types/claude-code.d.ts 2.1.274 기준)
+## 2. hook 계약 (types/claude-code.d.ts 2.1.289 기준으로 재확인)
 
 - **`turn.step` 입력**(`TurnStepInput`, 8867행): `turnId`, `index`, `model: string`, `effort?: 'low'|'medium'|'high'|'xhigh'|'max'|number`, `messageCount`, `agentId?`. 문서 문구: "A hook rewrites `model` or `effort` going down; the rest is pinned." 재작성은 `next({ ...e, model })`.
-- **`model`이 alias인지 전체 id인지**: `turn.step` 타입 문서는 명시하지 않는다. `model`은 "as the engine resolved it for this step"이라고만 되어 있어 읽을 때는 엔진이 해석한 값(전체 id일 가능성이 높음)이다. alias를 받는다는 문구는 `turn.step`에는 없고, 다른 곳(`agent.spawn`의 model 등)에만 "alias (`haiku`) or a full id"로 나온다. **결론: `turn.step`에 alias를 넘겨도 되는지는 타입만으로 확정 불가. 안전하게 전체 id를 쓰거나, 실제 세션에서 alias 재작성이 통하는지 실행 검증해야 한다.**
-- **`effort` 키를 빼고 `next`에 넘기면 유지되는지**: 문서는 "left out is kept"를 `turnId`/`index`/`agentId` 같은 pinned 필드에만 적고(8896행: "Pinned: a different value is refused, one left out is kept"), `effort`에는 적지 않았다. `effort`는 "absent for a model without effort; rewritable"이다. **결론: 생략 시 유지된다는 보장 문구 없음. 확정 불가, 실행 검증 필요.** 값을 바꾸지 않을 때는 `{ ...e }` 그대로 넘기는 것이 안전하다.
+- **`model`이 alias인지 전체 id인지 (2.1.289에서도 미해결)**: 2.1.289의 `TurnStepInput.model` 문구는 "Which model the request names, as the engine resolved it for this step (the session's, a fallback's). `next({ ...e, model })` names another."이다. 읽는 값은 엔진이 해석한 id이고, 재작성에 alias를 받는다는 문구는 여전히 `turn.step`에 없다("an alias resolves like the tool's parameter"는 `agent.spawn`에만 있다). **결론: 타입으로는 확정 불가.** 그래서 hook은 계속 전체 id(`claudeModelId`)로 재작성하고, 모델을 유지할 때는 엔진의 id(`claude-opus-5-5[1m]` 같은 접미사 포함)를 그대로 둔다. 실제 세션 확인이 필요하다.
+- **`effort` 키를 빼고 `next`에 넘기면 유지되는지 (2.1.289에서도 미해결)**: "Pinned: a different value is refused, one left out is kept"는 여전히 pinned 필드(`agentId` 등)에만 있고, `effort`는 "the session's setting or the model's default, absent for a model without effort; rewritable"이다. 생략 시 유지되는지, 효과 없음으로 보내는지 문구가 없다. **결론: 타입으로는 확정 불가.** hook은 effort 없는 모델(haiku)로 바꿀 때만 키를 지우고, 그 밖에는 값을 명시해 넘긴다. 실제 세션 확인이 필요하다.
+- **`prompt.submit` 입력의 출처**(2.1.289 `PromptSubmitInput`): `origin: PromptOrigin`(필수, `e.origin.kind`), `turnId?: string`(실행 중인 턴 위에 입력됐거나 그 턴에 전달된 프롬프트에만 있음), `wait: boolean`. `PromptOrigin.kind` 값: `composer`, `bridge`, `sdk`, `task-notification`, `scheduled-trigger`, `peer`, `peer-send-message`, `projects-relay`, `channel`(+`server`), `coordinator`, `observer`, `observer-activity`, `auto-continuation`, `unclassified`, `slack-ping`, `plugin`(+`name`, `asUser?`). R17에 따라 `composer`, `bridge`, `sdk`이면서 `turnId`가 없을 때만 판단한다.
+- **`session.end`**: `reason: SessionEndReason`(classic SessionEnd의 `reason`과 같은 단어), `sessionId`, `resume`. `/clear`는 `reason: 'clear'`로 보이고 이후 프로세스는 새 세션 id로 이어지며 `session.start`는 오지 않는다. 그래서 hook의 메모리(applied, 세션 모델, 실패 추적, 엔진 보고값)는 세션 id별로 둔다.
+- **userConfig `options`**: 2.1.289 `PluginOptions` 문서에 "A string field that declares `options` holds one of them: `/config` draws it as a picker over them, and a stored value outside them counts as unset, so its default applies."가 있다. `judge`에 `["jev","laya","kev"]`를 지정했고 `claude plugin validate .`가 통과한다.
 - **`turn.step` 핸들러 형태**(`StreamHook`, 7928행): `async function* ($, e, next) {}`. 통과는 `return yield* next(e)`. 일반 함수는 타입 오류("A plain function is a type error here"). `next(e)`를 두 번 부르면 요청이 두 번 나간다. `$.turn.step`의 반환은 `HookStream<TurnStepChunk, TurnStepResult>`.
 - **`tool.call` 입력**(`ToolCallEnvelope`, 8249행): 도구 이름 필드는 `e.tool`, 호출 id는 `tool_use_id`, 인자는 옆에 펼쳐진다(`e.command`). `tool`, `tool_use_id`, `agentId`는 예약 필드(재작성 거부).
 - **`tool.call` 결과**(`ToolCallResult`, 8294행): `{ deny: string }` 또는 `{ result, context?, ref?, text?, isError? }`. core 결과는 `{ ref, result, text }`, 도구가 오류를 냈을 때 `{ ref, result, text, isError }`. 따라서 `isError`(boolean)와 `text`(string) 필드가 있다.
-- **`$.store`**(2664행): "This plugin's own key-value store, kept between sessions and hot reloads; values are JSON data." 사용자 Claude Code 설정 디렉터리 아래 플러그인 전용 JSON 파일. 메서드 `get/set/delete/keys`(모두 Promise), 값은 JSON 직렬화 왕복, 전체 4 MiB 초과 시 reject. **플러그인 단위로 세션을 넘어 유지된다고 명시돼 있다.**
+- **`$.store`**(2.1.289): 사용자 Claude Code 설정 디렉터리 아래 플러그인 전용 JSON 파일. 메서드 `get/set/delete/keys`(모두 Promise), 값은 JSON 직렬화 왕복, `set`은 "a store over 4 MiB of JSON text in all"이면 reject. **플러그인 단위로 세션을 넘어 유지된다.** 그래서 세션 기록은 첫 프롬프트 2000자, 최신 200개, 7일로 제한한다(R19).
 
 ## 3. Codex 모델과 effort
 
@@ -79,12 +82,13 @@ jev (프리셋 제한: 첫 턴 2000ms): 5개 모두 `ok:true`, tier 모두 해�
 
 Task 9의 설치와 실제 세션 확인은 모든 Claude Code 세션에 영향을 주므로(R16) 실행하지 않았다. 아래를 사용자가 직접 수행한다.
 
-1. **타입 재생성**: tiergear 디렉터리의 대화형 세션에서 `/plugin-types`를 실행해 `types/claude-code.d.ts`를 다시 만든다(현재는 2.1.274 임시본). 이후 `npm run typecheck`를 다시 돌린다.
-2. **설치**: `npm run build && npm link`, `ln -s ~/IdeaProjects/tiergear ~/.claude/skills/tiergear`, `claude plugin list | grep -A3 tiergear`. 기대값: `tiergear@skills-dir`, `Status: ✔ loaded`, `which tiergear`가 경로 출력.
-3. **실제 세션 확인** (새 세션에서 순서대로, 상태줄을 이 문서에 기록):
+1. **설치**: `npm run build && npm link`, `ln -s ~/IdeaProjects/tiergear ~/.claude/skills/tiergear`, `claude plugin list | grep -A3 tiergear`. 기대값: `tiergear@skills-dir`, `Status: ✔ loaded`, `which tiergear`가 경로 출력.
+2. **실제 세션 확인** (새 세션에서 순서대로, 상태줄을 이 문서에 기록):
    1. `README의 제목을 알려줘` → 낮은 tier, 첫 턴이라 모델 변경(예: `→ haiku/-` 또는 `→ sonnet/low`).
    2. `이 프로젝트에 결제 재시도 큐를 설계해줘` → 높은 tier로 `up`. 모델은 그대로이고 effort만 그 모델 열의 값(haiku였다면 모델이 바뀜).
    3. `ㅇㅋ 계속` 두 번 → 첫 번은 유지(`easier step 1/2` 또는 `same tier`), 낮아져도 한 단계만.
-   4. `!pin 그대로 진행` → `unchanged (pinned)`.
-   5. `tiergear stats 1`로 기록 확인. `claude --resume`으로 같은 세션을 열어 프롬프트 하나를 보내고 상태줄이 이전 tier에서 이어지는지 확인(`$.store` 유지).
-4. **Laya/Kev**: 두 서버가 실행 중이 아니어서 측정하지 못했다. 서버를 띄운 뒤 `npx tsx scripts/probe-judge.ts laya` 와 `npx tsx scripts/probe-judge.ts kev`로 응답률과 지연을 재고, 필요하면 `/config`에서 `judge`를 바꿔 3-1, 3-2를 반복한다.
+   4. `!pin 그대로 진행` → `unchanged (pinned)`. 이후 요청은 세션 자체의 모델과 effort로 나간다.
+   5. 새 세션에서 첫 판단 뒤 `/model`이나 `/effort`로 직접 바꾸고 프롬프트를 보내면 hook 로그에 `manual model/effort change — routing paused for this session`이 한 번 남고 이후 `unchanged (pinned)`.
+   6. hook 계약 두 가지(alias 재작성 허용 여부, effort 생략 시 유지 여부)를 실제 요청으로 확인한다(위 2번).
+   7. `tiergear stats 1`로 기록 확인. `claude --resume`으로 같은 세션을 열어 프롬프트 하나를 보내고 상태줄이 이전 tier에서 이어지는지 확인(`$.store` 유지).
+3. **Laya/Kev**: 두 서버가 실행 중이 아니어서 측정하지 못했다. 서버를 띄운 뒤 `npx tsx scripts/probe-judge.ts laya` 와 `npx tsx scripts/probe-judge.ts kev`로 응답률과 지연을 재고, 필요하면 `/config`에서 `judge`를 바꿔 2-1, 2-2를 반복한다.

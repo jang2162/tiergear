@@ -5,9 +5,14 @@
 - **첫 턴**: 첫 프롬프트를 판단기에 보내 tier(trivial, quick, standard, deep, max)를 받고, 표 A·B로 모델과 effort를 정합니다. 첫 턴에는 잃을 캐시가 없어 모델도 함께 바뀝니다.
 - **이후 턴**: 기본은 모델을 그대로 두고 effort만 조정합니다. 올리는 것은 쉽고(확신도 0.5), 내리는 것은 어렵습니다(확신도 0.85가 연속 2턴).
 - **바닥선**: 첫 판단의 한 단계 아래 밑으로는 내려가지 않습니다. `tiergear launch`/`spawn`으로 띄운 세션은 띄울 때의 tier가 바닥선입니다.
-- **`!pin`**: 프롬프트를 `!pin`으로 시작하면 그 세션은 고정되어 더 이상 바뀌지 않습니다(`!pin` 접두어는 판단기와 모델에 가기 전에 제거됩니다).
+- **`!pin`**: 프롬프트를 `!pin`으로 시작하면 그 세션은 고정됩니다. tiergear가 적용하던 모델과 effort를 거두고, 그때부터는 세션 자체의 모델과 effort(시작 플래그나 `/model`, `/effort`로 정한 값)가 그대로 쓰입니다(`!pin` 접두어는 판단기와 모델에 가기 전에 제거됩니다).
+- **직접 바꾸면 멈춤**: 세션 중에 `/model`이나 `/effort`로 모델이나 effort를 직접 바꾸면 `!pin`과 똑같이 그 세션의 조정을 멈추고 hook 로그에 `[tiergear] manual model/effort change — routing paused for this session`을 한 번 남깁니다. 엔진이 보고하는 세션 값을 턴 사이에 비교하므로 tiergear 자신의 변경은 여기에 걸리지 않습니다. 엔진이 턴 첫 요청부터 대체 모델(fallback)로 바꾼 경우에도 수동 변경으로 보일 수 있습니다.
 
 판단기가 느리거나 실패하면 해당 턴은 건드리지 않고 그대로 진행합니다.
+
+### 판단하는 프롬프트
+
+사용자가 직접 쓴 프롬프트만 판단합니다: 터미널 입력(`composer`), Remote Control(`bridge`), SDK·`claude -p`(`sdk`). 백그라운드 작업 알림, 예약 작업·`/loop`, 다른 세션이나 SendMessage로 온 메시지, observer, 자동 이어가기, 플러그인이 보낸 프롬프트, 출처 불명(`unclassified`) 등은 판단하지 않고 그대로 통과시키며 tier와 적용 값도 바꾸지 않습니다. 실행 중인 턴에 들어가는 프롬프트(턴이 도는 동안 입력해 큐에 들어간 것 포함)도 판단하지 않습니다. `/`로 시작하는 슬래시 명령도 판단하지 않습니다.
 
 ## 설치
 
@@ -81,7 +86,7 @@ Codex에서 deep과 max는 같은 `gpt-5.6-terra`를 쓰고 effort만 xhigh, max
 
 | 옵션 | 기본값 | 설명 |
 | --- | --- | --- |
-| `judge` | `jev` | 판단기 프리셋: jev, laya, kev |
+| `judge` | `jev` | 판단기 프리셋: jev, laya, kev 중에서 고릅니다(`/config`에 목록으로 표시). 알 수 없는 값이면 jev를 쓰고 hook 로그에 한 번 남깁니다 |
 | `judgeBaseUrl` | 프리셋 | 비우면 프리셋 주소 |
 | `judgeModel` | 프리셋 | 비우면 프리셋 모델 |
 | `judgeApiKey` | 프리셋 환경변수 | 비우면 TYPESAFE_API_KEY, OLLAYA_API_KEY, KEV_API_KEY (민감 값) |
@@ -91,8 +96,8 @@ Codex에서 deep과 max는 같은 `gpt-5.6-terra`를 쓰고 effort만 xhigh, max
 | `downgradeStreak` | `2` | 한 단계 내리는 데 필요한 연속 턴 수 |
 | `stuckConfidence` | `0.6` | 판단기의 막힘 확률이 이 값 이상이면 한 단계 올림 |
 | `stuckFailures` | `3` | 같은 도구 실패가 이만큼 연속이면 한 단계 올림 |
-| `firstTurnTimeoutMs` | 프리셋 | 첫 턴 지연 예산 |
-| `turnTimeoutMs` | 프리셋 | 이후 턴 지연 예산 |
+| `firstTurnTimeoutMs` | 프리셋 | 첫 턴 지연 예산. 최대 8000ms(hook 전체 예산이 10초라 더 큰 값은 8000으로 줄입니다) |
+| `turnTimeoutMs` | 프리셋 | 이후 턴 지연 예산. 최대 8000ms |
 
 ## 상태줄
 
@@ -112,7 +117,7 @@ tiergear spawn  "<brief>" --name <task> [--agent claude|codex] [--repo <dir>] [-
 tiergear stats [days]
 ```
 
-- `launch`: 판단 후 실행할 명령(`claude --model opus --effort xhigh` 등)을 출력합니다. Claude에서 `--worktree`를 주면 그 경로에 바닥선을 씁니다.
+- `launch`: 판단 후 실행할 명령(`claude --model opus --effort xhigh` 등)을 출력합니다. Claude에서 `--worktree`를 주면 그 경로에 바닥선을 씁니다. 경로는 절대 실제 경로(심볼릭 링크 해석)로 바꿔 쓰므로 상대 경로를 줘도 그 폴더에서 연 세션이 찾습니다. `--agent codex`와 함께 주면 바닥선은 Claude 전용이라 쓰지 않고 한 줄 안내만 출력합니다.
 - `spawn`: Orca worktree와 터미널을 만들고 판단된 모델과 effort로 에이전트를 띄운 뒤 브리프를 보냅니다. 결과를 JSON으로 출력합니다.
   - Claude가 "이 폴더를 신뢰하는가"를 물어도 **`spawn`은 대신 승인하지 않습니다.** 120초 안에 Orca에서 직접 승인하세요. 에이전트가 준비되지 않으면 브리프는 **보내지 않고**(종료 코드 1) 폴백 셸이 worktree에 남을 수 있습니다.
 - `stats`: 기록된 결정 수, 변경 종류 집계, 판단기별 응답률과 평균 지연(기본 7일).
@@ -135,7 +140,7 @@ CLI는 플러그인 옵션을 읽지 못하므로 플래그, 환경변수, 프�
 | 표 | `~/.config/tiergear/tables.json` |
 | 바닥선 (유효 24시간) | `~/.local/state/tiergear/floors/<fnv1a(worktree)>.json` |
 | 결정 로그 (파일당 1000줄) | `~/.local/state/tiergear/decisions/<name>.jsonl` |
-| 세션 기록 (7일 보존) | 플러그인 `$.store`의 `session:<id>` |
+| 세션 기록 (7일 보존, 최신 200개까지) | 플러그인 `$.store`의 `session:<id>` (첫 프롬프트는 2000자로 줄여 저장) |
 
 프롬프트 원문은 로그에 남기지 않습니다.
 
@@ -151,11 +156,11 @@ CLI는 플러그인 옵션을 읽지 못하므로 플래그, 환경변수, 프�
 - 첫 턴: 첫 프롬프트(길면 앞뒤만).
 - 이후 턴: 첫 프롬프트, 최근 6개 메시지(각각 길면 앞뒤만, 사용한 도구 이름 포함), 다음 프롬프트, 수정한 파일 수, 반복 실패 횟수, 현재 tier와 effort.
 - jev는 외부(TypeSafe)로 전송됩니다. laya와 kev는 로컬 서버에 머뭅니다(kev를 Modal에 띄우면 그쪽으로 갑니다).
-- `/`로 시작하는 프롬프트(슬래시 명령)는 판단하지 않습니다.
+- 판단하지 않는 프롬프트는 위 "판단하는 프롬프트"를 보세요. 판단하지 않은 프롬프트는 판단기로 가지 않습니다.
 
 ## 제한
 
 - Codex는 띄울 때만 모델과 effort를 정합니다(`launch`/`spawn`). 세션 중 조정은 Claude Code만 됩니다.
-- hook은 early-access 기능이라 Claude Code 업데이트로 계약이 바뀔 수 있습니다. `types/claude-code.d.ts`는 `/plugin-types`로 갱신합니다.
+- hook은 early-access 기능이라 Claude Code 업데이트로 계약이 바뀔 수 있습니다. `types/claude-code.d.ts`는 Claude Code 2.1.289가 만든 선언 파일입니다. 업데이트 후에는 엔진이 플러그인 옆에 새로 쓰는 `.claude-plugin/types/claude-code/index.d.ts`로 교체합니다.
 - 확신도 기준값(0.5, 0.85, 0.6)은 Jev 기준입니다. 다른 판단기는 `tiergear stats`로 응답률과 지연을 보고 옵션을 조정하세요.
 - 서브에이전트 요청은 건드리지 않고, 메인 루프 요청만 바꿉니다.
