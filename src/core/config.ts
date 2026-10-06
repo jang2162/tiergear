@@ -15,7 +15,7 @@ export interface Config {
   turnTimeoutMs: number;
 }
 
-type NumberKey = { [K in keyof Config]: Config[K] extends number ? K : never }[keyof Config];
+type NumberKey = { [K in keyof Config]-?: Config[K] extends number ? K : never }[keyof Config];
 
 const NUMBER_KEYS: readonly NumberKey[] = [
   'minUpgradeConfidence',
@@ -49,8 +49,8 @@ export function resolveConfig(options: Readonly<Record<string, unknown>>): Confi
     turnTimeoutMs: preset.turnTimeoutMs,
   };
   for (const key of NUMBER_KEYS) {
-    const value = options[key as string];
-    if (typeof value === 'number' && Number.isFinite(value)) (config as any)[key as any] = value;
+    const value = options[key];
+    if (typeof value === 'number' && Number.isFinite(value)) config[key] = value;
   }
   const apiKey = text(options, 'judgeApiKey');
   if (apiKey) config.judgeApiKey = apiKey;
