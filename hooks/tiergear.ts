@@ -371,6 +371,7 @@ export function createTiergear(options: Readonly<Record<string, unknown>>) {
       const mem = memory(session);
       mem.failures = isError ? recordFailure(mem.failures, failureSignature(tool, text ?? '')) : recordSuccess(mem.failures, tool);
     },
+    config,
     applied: (session: string): Applied | null => sessions.get(session)?.applied ?? null,
     statusLine: (session: string): string | null => sessions.get(session)?.statusLine ?? null,
     async recent(host: HookHost, limit: number): Promise<string[]> {
@@ -439,20 +440,15 @@ export const register: Register = (on: On, options: PluginOptions) => {
     const line = session === null ? null : tiergear.statusLine(session);
     if (line === null) return below;
     const { Box, Text, Button } = $.ui.resolve(e);
-    const ours = Box({
-      flexDirection: 'row',
-      gap: 1,
-      children: [
-        Text({ dimColor: true, children: line }),
-        Button({
-          label: 'Recent',
-          onPress: async () => {
-            if ((await $.ui.panes()).some((pane) => pane.id === RECENT_PANE)) await $.ui.close({ id: RECENT_PANE });
-            else await $.ui.open({ id: RECENT_PANE, title: RECENT_TITLE });
-          },
-        }),
-      ],
+    const text = Text({ dimColor: true, children: line });
+    const button = Button({
+      label: 'Recent',
+      onPress: async () => {
+        if ((await $.ui.panes()).some((pane) => pane.id === RECENT_PANE)) await $.ui.close({ id: RECENT_PANE });
+        else await $.ui.open({ id: RECENT_PANE, title: RECENT_TITLE });
+      },
     });
+    const ours = Box({ flexDirection: 'row', gap: 1, children: tiergear.config.showRecentButton ? [text, button] : [text] });
     return Box({ flexDirection: 'column', children: [below, ours] });
   });
 

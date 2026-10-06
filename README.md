@@ -121,6 +121,7 @@ Change these in `/config` (plugin options).
 | `stuckFailures` | `3` | Raise one step after this many identical tool failures in a row |
 | `firstTurnTimeoutMs` | preset | First-turn latency budget. At most 8000ms (the whole hook budget is 10s, so larger values are cut to 8000) |
 | `turnTimeoutMs` | preset | Later-turn latency budget. At most 8000ms |
+| `showRecentButton` | `true` | Show the **[ Recent ]** button above the prompt. Off: the line stays and `/tiergear` still opens the pane |
 
 ## Status band
 
@@ -137,7 +138,7 @@ Reasons for no change: `no answer` (no judge response), `low confidence`, `same 
 
 ### Recent decisions
 
-Press **[ Recent ]** to open a pane listing this session's decisions, newest first, and press it again to close it. `/tiergear` opens the pane too.
+Press **[ Recent ]** to open a pane listing this session's decisions, newest first, and press it again to close it. `/tiergear` opens the pane too. To hide the button, turn off `showRecentButton` in the plugin options.
 
 ```
 12:11  judge quick 0.44 → hold deep (low confidence) · opus/xhigh

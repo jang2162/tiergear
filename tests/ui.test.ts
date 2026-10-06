@@ -5,13 +5,13 @@ type Hook = (...args: unknown[]) => Promise<unknown>;
 type Element = { type: string; props: Record<string, unknown> & { children?: unknown } };
 
 // Registers the module against a recording `on`, so each hook can be driven as the engine would.
-function load() {
+function load(options: Record<string, unknown> = {}) {
   const hooks: { event: string; matcher: Record<string, unknown> | undefined; hook: Hook }[] = [];
   const on = (event: string, a: unknown, b?: unknown) => {
     hooks.push(b === undefined ? { event, matcher: undefined, hook: a as Hook } : { event, matcher: a as Record<string, unknown>, hook: b as Hook });
     return {};
   };
-  register(on as never, {} as never);
+  register(on as never, options as never);
   return (event: string, match: Record<string, unknown> = {}) =>
     hooks.find((h) => h.event === event && Object.entries(match).every(([k, v]) => h.matcher?.[k] === v))!.hook;
 }
@@ -105,6 +105,17 @@ describe('band above the prompt', () => {
     expect(closed).toEqual([{ id: 'tiergear-recent' }]);
     await press();
     expect(opened).toHaveLength(2);
+  });
+
+  it('shows the line alone when the button is turned off', async () => {
+    const hook = load({ showRecentButton: false });
+    const { $ } = fakeDollar();
+    await decide(hook, $);
+    const tree = (await hook('ui.render', { component: 'AbovePrompt' })($, band(), below)) as Element;
+    const ours = (tree.props.children as [string, Element])[1];
+    const parts = [ours.props.children].flat() as Element[];
+    expect(parts.map((p) => p.type)).toEqual(['Text']);
+    expect(parts[0]!.props.children).toBe('tiergear · deep 0.80 → opus/xhigh');
   });
 
   it('yields to a survey', async () => {

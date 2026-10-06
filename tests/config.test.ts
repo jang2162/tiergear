@@ -15,7 +15,13 @@ describe('resolveConfig', () => {
       stuckFailures: 3,
       firstTurnTimeoutMs: 2000,
       turnTimeoutMs: 1200,
+      showRecentButton: true,
     });
+  });
+
+  it('hides the Recent button only when the option is false', () => {
+    expect(resolveConfig({ showRecentButton: false }).showRecentButton).toBe(false);
+    expect(resolveConfig({ showRecentButton: 'no' }).showRecentButton).toBe(true);
   });
 
   it('takes the address, model and timeouts from the chosen preset', () => {

@@ -13,6 +13,8 @@ export interface Config {
   stuckFailures: number;
   firstTurnTimeoutMs: number;
   turnTimeoutMs: number;
+  // The [ Recent ] button in the band above the prompt; /tiergear opens the pane either way.
+  showRecentButton: boolean;
 }
 
 // A hook has 10s; the judge gets at most 8s of it so the rest of the hook still fits.
@@ -50,6 +52,7 @@ export function resolveConfig(options: Readonly<Record<string, unknown>>): Confi
     stuckFailures: 3,
     firstTurnTimeoutMs: preset.firstTurnTimeoutMs,
     turnTimeoutMs: preset.turnTimeoutMs,
+    showRecentButton: options['showRecentButton'] !== false,
   };
   for (const key of NUMBER_KEYS) {
     const value = options[key];
