@@ -27,7 +27,7 @@ describe('state', () => {
     expect(firstTurnState('fix the bug')).toEqual({ task: 'fix the bug' });
   });
 
-  it('carries the task, the last six messages, the prompt and the stats after it', () => {
+  it('carries the task, the last three exchanges, the prompt and the stats after it', () => {
     const messages: ContextMessage[] = Array.from({ length: 8 }, (_, i) => ({
       role: i % 2 === 0 ? 'user' : 'assistant',
       text: `m${i}`,
@@ -46,5 +46,48 @@ describe('state', () => {
     expect(state.next_prompt).toBe('ok continue');
     expect(state.stats).toEqual({ files_changed: 1, repeated_failures: 2 });
     expect(state.current).toEqual({ tier: 'deep', effort: 'xhigh' });
+  });
+});
+
+describe('recent exchanges', () => {
+  const user = (text: string): ContextMessage => ({ role: 'user', text });
+  const toolResult = (text = ''): ContextMessage => ({ role: 'user', text, isToolResult: true });
+  const assistant = (text: string, ...tools: string[]): ContextMessage => ({ role: 'assistant', text, toolUses: tools.map((tool) => ({ tool })) });
+  const recentOf = (messages: ContextMessage[], firstPrompt = 'task') =>
+    nextTurnState({ firstPrompt, prompt: 'yes', messages, repeatedFailures: 0, tier: 'deep', effort: 'xhigh' }) as {
+      task: string;
+      recent: { role: string; text: string; tools: string[] }[];
+    };
+
+  it('groups messages into exchanges, so tool steps do not push the conversation out', () => {
+    const messages = [
+      user('p1'), assistant('a1'),
+      user('p2'), assistant('looking', 'Bash'), toolResult(), assistant('', 'Read'), toolResult('reminder text'), assistant('done, commit?'),
+      user('p3'), assistant('', 'Edit'), toolResult(), assistant('r3 final'),
+      user('p4'), assistant('x', 'Grep'), toolResult(), assistant('', 'Bash'), toolResult(), assistant('', 'Bash'), toolResult(), assistant('Shall I commit?'),
+    ];
+    const { recent } = recentOf(messages);
+    expect(recent.map((m) => `${m.role}:${m.text}`)).toEqual([
+      'user:p2', 'assistant:done, commit?', 'user:p3', 'assistant:r3 final', 'user:p4', 'assistant:Shall I commit?',
+    ]);
+    expect(recent[1]!.tools).toEqual(['Bash', 'Read']);
+    expect(recent[5]!.tools).toEqual(['Grep', 'Bash']);
+  });
+
+  it('gives the reply the next prompt answers the most room, keeping its end', () => {
+    const last = 'h'.repeat(1000) + 'q'.repeat(1000);
+    const { recent } = recentOf([user('o'.repeat(1000)), assistant('o'.repeat(1000)), user('p'.repeat(1000)), assistant(last)]);
+    const [olderPrompt, olderReply, lastPrompt, lastReply] = recent.map((m) => m.text);
+    expect(lastReply!.endsWith('q'.repeat(1000))).toBe(true);
+    expect(lastReply!.length).toBeLessThan(1600);
+    for (const text of [olderPrompt, olderReply, lastPrompt]) {
+      expect(text).toContain('chars omitted');
+      expect(text!.length).toBeLessThan(450);
+    }
+  });
+
+  it('shortens the first prompt, which matters less as the session goes on', () => {
+    const first = 'f'.repeat(2000);
+    expect(recentOf([user('p'), assistant('a')], first).task).toBe(abridge(first, 500));
   });
 });

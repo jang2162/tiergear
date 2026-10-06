@@ -32,6 +32,7 @@ interface SessionMessageLike {
   role: string;
   text: string;
   toolUses?: readonly { tool: string; input?: unknown }[];
+  toolResults?: readonly unknown[];
 }
 
 /** The part of `$` this hook uses, so tests can drive it without an engine. */
@@ -105,8 +106,13 @@ async function resolveApiKey(host: HookHost, config: Config): Promise<string | u
   return undefined;
 }
 
-function toContext(message: SessionMessageLike): ContextMessage {
-  return { role: message.role === 'assistant' ? 'assistant' : 'user', text: message.text, toolUses: message.toolUses ?? [] };
+export function toContext(message: SessionMessageLike): ContextMessage {
+  return {
+    role: message.role === 'assistant' ? 'assistant' : 'user',
+    text: message.text,
+    toolUses: message.toolUses ?? [],
+    isToolResult: (message.toolResults?.length ?? 0) > 0,
+  };
 }
 
 function errorText(error: unknown): string {

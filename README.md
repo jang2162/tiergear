@@ -193,9 +193,11 @@ Raw prompt text is never written to the logs.
 ## Data sent to the judge
 
 - First turn: the first prompt (only the start and end if long).
-- Later turns: the first prompt, the last 6 messages (each trimmed to start and end if long, including names of tools used), the next prompt, the number of files edited, the repeated failure count, and the current tier and effort.
+- Later turns: the next prompt, the last 3 exchanges, the first prompt (up to 500 characters), the number of files edited, the repeated failure count, and the current tier and effort.
+  - An exchange is one prompt, the assistant's last words before the next prompt, and the names of the tools it used. Tool calls and their results are folded into it, so a busy turn doesn't push the conversation out of view.
+  - Recent text gets more room: the reply the next prompt answers is sent up to 1500 characters, keeping mostly its end, where a question usually sits. Older prompts and replies get 400 characters each. Longer text keeps its start and end.
 - jev sends data externally (TypeSafe). laya and kev stay on your local server (if you run kev on Modal, data goes there).
-- See "Which prompts are judged" above. Prompts that aren't judged are never sent to the judge.
+- Prompts that aren't judged (see "Which prompts are judged" above) never go to the judge as the prompt being judged, but one can still appear among the recent exchanges: a task notification or a message from another session is a prompt in the conversation too. Nothing is masked, so with jev that text leaves your machine.
 
 ## Limitations
 

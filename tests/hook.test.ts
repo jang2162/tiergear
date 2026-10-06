@@ -12,13 +12,13 @@ function fakeHost(replies: Reply[], files: Record<string, string> = {}, env: Rec
   const requests: { url: string; headers: Record<string, string>; body: string }[] = [];
   const statuses: (string | undefined)[] = [];
   const logs: string[] = [];
-  const session = { id: 's1', messageReads: 0, refreshes: 0 };
+  const session = { id: 's1', messageReads: 0, refreshes: 0, history: [] as { role: string; text: string; toolUses?: { tool: string }[]; toolResults?: unknown[] }[] };
   let clock = 1_800_000_000_000;
   const host: HookHost = {
     session: {
       messages: async () => {
         session.messageReads++;
-        return [];
+        return session.history;
       },
       cwd: async () => '/w/task',
       id: async () => session.id,
@@ -285,6 +285,26 @@ describe('status line', () => {
     // Built by hand: engineStep's default would turn an undefined effort into medium.
     await tiergear.step(host, { turnId: 't2', index: 0, model: 'claude-haiku-4-5', messageCount: 1 });
     expect(tiergear.statusLine('s1')).toBe('tiergear · deep 0.80 · haiku/- · unchanged (pinned)');
+  });
+});
+
+describe('judge context', () => {
+  it("sends exchanges built from the engine's messages, telling tool results from prompts", async () => {
+    const { host, requests, session } = fakeHost([{ tier: ['deep', 0.8] }, { tier: ['deep', 0.8], stuck: 0.1 }]);
+    const tiergear = createTiergear({});
+    await tiergear.promptSubmit(host, typed('refactor the parser'));
+    session.history = [
+      { role: 'user', text: 'refactor the parser' },
+      { role: 'assistant', text: 'reading', toolUses: [{ tool: 'Read' }] },
+      // The engine can join text blocks (a reminder) onto a tool-result message; it is still no prompt.
+      { role: 'user', text: 'reminder', toolResults: [{ tool_use_id: 't', text: 'file body' }] },
+      { role: 'assistant', text: 'Done. Commit it?' },
+    ];
+    await tiergear.promptSubmit(host, typed('yes'));
+    expect(JSON.parse(requests[1]!.body).state.recent).toEqual([
+      { role: 'user', text: 'refactor the parser', tools: [] },
+      { role: 'assistant', text: 'Done. Commit it?', tools: ['Read'] },
+    ]);
   });
 });
 
