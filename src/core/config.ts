@@ -15,6 +15,9 @@ export interface Config {
   turnTimeoutMs: number;
   // The [ Recent ] button in the band above the prompt; /tiergear opens the pane either way.
   showRecentButton: boolean;
+  // The line and the tier buttons in the band; a status line tool can show the line instead (tiergear status).
+  showStatusText: boolean;
+  showTierButtons: boolean;
 }
 
 // A hook has 10s; the judge gets at most 8s of it so the rest of the hook still fits.
@@ -53,6 +56,8 @@ export function resolveConfig(options: Readonly<Record<string, unknown>>): Confi
     firstTurnTimeoutMs: preset.firstTurnTimeoutMs,
     turnTimeoutMs: preset.turnTimeoutMs,
     showRecentButton: options['showRecentButton'] !== false,
+    showStatusText: options['showStatusText'] !== false,
+    showTierButtons: options['showTierButtons'] !== false,
   };
   for (const key of NUMBER_KEYS) {
     const value = options[key];

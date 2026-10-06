@@ -157,6 +157,28 @@ describe('band above the prompt', () => {
     expect(line).toBe('tiergear · deep 0.80 → opus/xhigh');
   });
 
+  // The band's row as drawn, whatever it holds.
+  async function rowOf(options: Record<string, unknown>): Promise<unknown> {
+    const hook = load(options);
+    const { $ } = fakeDollar();
+    await decide(hook, $);
+    return hook('ui.render', { component: 'AbovePrompt' })($, band(), below);
+  }
+  const labels = (tree: unknown) =>
+    ([((tree as Element).props.children as Element[])[1]!.props.children].flat() as Element[]).map((p) => (p.type === 'Text' ? 'TEXT' : p.props.label));
+
+  it('leaves the status text out when it is turned off, as a status line tool shows it', async () => {
+    expect(labels(await rowOf({ showStatusText: false }))).toEqual(['off', 'trivial', 'quick', 'standard', '[deep]', 'max', 'Recent']);
+  });
+
+  it('leaves the tier buttons out when they are turned off', async () => {
+    expect(labels(await rowOf({ showTierButtons: false }))).toEqual(['TEXT', 'Recent']);
+  });
+
+  it('draws nothing of its own when every part is turned off', async () => {
+    expect(await rowOf({ showStatusText: false, showTierButtons: false, showRecentButton: false })).toBe('BELOW');
+  });
+
   it('yields to a survey', async () => {
     const hook = load();
     const { $ } = fakeDollar();

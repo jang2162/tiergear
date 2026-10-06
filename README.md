@@ -147,7 +147,9 @@ Change these in `/config` (plugin options).
 | `stuckFailures` | `3` | Raise one step after this many identical tool failures in a row |
 | `firstTurnTimeoutMs` | preset | First-turn latency budget. At most 8000ms (the whole hook budget is 10s, so larger values are cut to 8000) |
 | `turnTimeoutMs` | preset | Later-turn latency budget. At most 8000ms |
-| `showRecentButton` | `true` | Show the **[ Recent ]** button above the prompt. Off: the line stays and `/tiergear` still opens the pane |
+| `showRecentButton` | `true` | Show the **[ Recent ]** button above the prompt. Off: `/tiergear` still opens the pane |
+| `showStatusText` | `true` | Show the `tiergear · …` line above the prompt. Turn it off when a status line tool shows it (see [Status line tools](#status-line-tools-ccstatusline)) |
+| `showTierButtons` | `true` | Show the off and tier buttons above the prompt |
 
 ## Status band
 
@@ -177,7 +179,7 @@ Reasons for no change: `no answer` (no judge response), `low confidence`, `same 
 
 ### Recent decisions
 
-Press **[ Recent ]** to open a pane listing this session's decisions, newest first, and press it again to close it. `/tiergear` opens the pane too. To hide the button, turn off `showRecentButton` in the plugin options.
+Press **[ Recent ]** to open a pane listing this session's decisions, newest first, and press it again to close it. `/tiergear` opens the pane too. To hide the button, turn off `showRecentButton` in the plugin options. Each part of the band has its own option (`showStatusText`, `showTierButtons`, `showRecentButton`); with all three off the band draws nothing.
 
 ```
 12:11  judge quick 0.44 → hold deep (low confidence) · opus/xhigh
@@ -198,6 +200,8 @@ tiergear status [tier|state|model|effort] [--session <id>] [--json] [--format <t
 - Default output: `deep · opus/xhigh`, `paused · sonnet/medium` when paused; nothing (exit 0) when the session has no decision yet, so a widget hides.
 - A field prints that value alone, for a widget of its own: `tiergear status model` prints `opus`, `tiergear status effort` prints `xhigh`, `tiergear status tier` prints `deep`, `tiergear status state` prints `auto` or `paused`. An unknown value prints nothing. A field wins over `--json` and `--format`.
 - `--format` fills `{tier}`, `{model}`, `{effort}`, `{state}` (`auto` or `paused`) and `{line}` (the band's text); an unknown value is `-` (`unset` for the tier). `--json` prints the whole record, or `null`.
+
+With the line shown there, turn off `showStatusText` to keep the band to its buttons.
 
 In [ccstatusline](https://github.com/sirmalloc/ccstatusline), add a **Custom Command** widget with the command `tiergear status`, or one widget per value (`tiergear status model`, `tiergear status effort`, ...) to color them apart (the CLI must be installed, see [CLI](#cli-optional)). It runs in about 50ms, well within the widget's default 1000ms timeout. The value follows a pick or a judged prompt at the next status line refresh.
 

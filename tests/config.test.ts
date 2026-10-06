@@ -16,12 +16,19 @@ describe('resolveConfig', () => {
       firstTurnTimeoutMs: 2000,
       turnTimeoutMs: 1200,
       showRecentButton: true,
+      showStatusText: true,
+      showTierButtons: true,
     });
   });
 
   it('hides the Recent button only when the option is false', () => {
     expect(resolveConfig({ showRecentButton: false }).showRecentButton).toBe(false);
     expect(resolveConfig({ showRecentButton: 'no' }).showRecentButton).toBe(true);
+  });
+
+  it('hides the status text and the tier buttons only when their options are false', () => {
+    expect(resolveConfig({ showStatusText: false, showTierButtons: false })).toMatchObject({ showStatusText: false, showTierButtons: false });
+    expect(resolveConfig({ showStatusText: 0, showTierButtons: 'no' })).toMatchObject({ showStatusText: true, showTierButtons: true });
   });
 
   it('takes the address, model and timeouts from the chosen preset', () => {

@@ -527,24 +527,31 @@ export const register: Register = (on: On, options: PluginOptions) => {
     if (e.props.hasSurvey) return below;
     const session = await $.session.id().catch(() => null);
     if (session === null) return below;
-    const { tier, paused } = await tiergear.controls(hostOf($));
+    const { showStatusText, showTierButtons, showRecentButton } = tiergear.config;
+    if (!showStatusText && !showTierButtons && !showRecentButton) return below;
     const { Box, Text, Button } = $.ui.resolve(e);
-    const chosen = paused ? OFF : tier;
-    // One plain button per choice, so a single click picks; the one in effect bracketed at full strength.
-    const buttons = [OFF, ...TIER_ORDER].map((value) =>
-      Button({
-        key: `tiergear-tier-${value}`,
-        label: value === chosen ? `[${value}]` : value,
-        plain: true,
-        dimColor: value !== chosen,
-        onPress: async () => {
-          if (value === OFF) await tiergear.pause(hostOf($));
-          else if (isTier(value)) await tiergear.pick(hostOf($), value);
-        },
-      }),
-    );
-    if (tiergear.config.showRecentButton) {
-      buttons.push(
+    const parts = showStatusText ? [Text({ dimColor: true, children: tiergear.statusLine(session) ?? 'tiergear' })] : [];
+    if (showTierButtons) {
+      const { tier, paused } = await tiergear.controls(hostOf($));
+      const chosen = paused ? OFF : tier;
+      // One plain button per choice, so a single click picks; the one in effect bracketed at full strength.
+      for (const value of [OFF, ...TIER_ORDER]) {
+        parts.push(
+          Button({
+            key: `tiergear-tier-${value}`,
+            label: value === chosen ? `[${value}]` : value,
+            plain: true,
+            dimColor: value !== chosen,
+            onPress: async () => {
+              if (value === OFF) await tiergear.pause(hostOf($));
+              else if (isTier(value)) await tiergear.pick(hostOf($), value);
+            },
+          }),
+        );
+      }
+    }
+    if (showRecentButton) {
+      parts.push(
         Button({
           label: 'Recent',
           onPress: async () => {
@@ -554,8 +561,7 @@ export const register: Register = (on: On, options: PluginOptions) => {
         }),
       );
     }
-    const line = Text({ dimColor: true, children: tiergear.statusLine(session) ?? 'tiergear' });
-    return Box({ flexDirection: 'column', children: [below, Box({ flexDirection: 'row', gap: 2, children: [line, ...buttons] })] });
+    return Box({ flexDirection: 'column', children: [below, Box({ flexDirection: 'row', gap: 2, children: parts })] });
   });
 
   on('ui.render', { component: 'Pane', requestId: RECENT_PANE }, async ($, e) => {
