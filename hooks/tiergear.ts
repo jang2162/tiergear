@@ -547,13 +547,13 @@ export const register: Register = (on: On, options: PluginOptions) => {
           },
         }),
       );
-      // Fenced off from the line and from Recent: Tier: | off … max |
+      // Fenced off from the line and from Recent: | Tier: off … max |
       const bar = Text({ dimColor: true, children: '|' });
       parts.push(
         Box({
           flexDirection: 'row',
           gap: 1,
-          children: [Text({ dimColor: true, children: 'Tier:' }), bar, Box({ flexDirection: 'row', gap: 2, children: buttons }), bar],
+          children: [bar, Text({ dimColor: true, children: 'Tier:' }), Box({ flexDirection: 'row', gap: 2, children: buttons }), bar],
         }),
       );
     }

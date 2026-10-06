@@ -173,7 +173,7 @@ describe('band above the prompt', () => {
     leaves(((tree as Element).props.children as Element[])[1]!).map((p) => (p.type === 'Text' ? p.props.children : p.props.label));
 
   it('leaves the status text out when it is turned off, as a status line tool shows it', async () => {
-    expect(labels(await rowOf({ showStatusText: false }))).toEqual(['Tier:', '|', 'off', 'trivial', 'quick', 'standard', '[deep]', 'max', '|', 'Recent']);
+    expect(labels(await rowOf({ showStatusText: false }))).toEqual(['|', 'Tier:', 'off', 'trivial', 'quick', 'standard', '[deep]', 'max', '|', 'Recent']);
   });
 
   it('leaves the tier buttons out when they are turned off', async () => {

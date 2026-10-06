@@ -156,7 +156,7 @@ Change these in `/config` (plugin options).
 tiergear shows its state in one row just above the prompt: a line, then a button per tier, one for off, and **[ Recent ]**. The choice in effect is bracketed; the others are dim.
 
 ```
-tiergear · deep 0.91 → opus/xhigh  Tier: | off  trivial  quick  standard  [deep]  max |  [ Recent ]
+tiergear · deep 0.91 → opus/xhigh  | Tier: off  trivial  quick  standard  [deep]  max |  [ Recent ]
 ```
 
 It doesn't use the status line below the prompt; a line an earlier version left there is cleared on the first judged prompt. Before anything is decided the line reads just `tiergear` and no button is bracketed.
