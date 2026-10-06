@@ -57,3 +57,20 @@ tiergear 저장소는 미등록이어서 `orca repo add --path /Users/jang2162/I
 - send 결과에 `warnings`: "input was accepted, but this provider cannot report delivery"(`provider:"unsupported"`). `accepted:true`여도 전달 확인은 아니다.
 - 존재하지 않는 handle `nope`는 `terminal_handle_stale`이었다(`terminal_not_found` 같은 별도 code 아님).
 - 정리: `tiergear-probe` worktree와 브랜치 `jang2162/tiergear-probe`는 삭제 확인(`git worktree list`, `git branch`). 빈 `.worktrees/tiergear/` 디렉터리는 남았다(untracked 항목으로 보이지 않음).
+
+## 5. 판단기 실측 (Task 4)
+
+측정일: 2026-10-06. `npx tsx scripts/probe-judge.ts <name>`, 첫 턴 state(`{task}`), withStuck=false.
+
+jev (프리셋 제한: 첫 턴 2000ms): 5개 모두 `ok:true`, tier 모두 해석됨(null 없음). 지연은 제한의 약 10%.
+
+| 프롬프트 | tier | 확신도 | 지연 |
+| --- | --- | --- | --- |
+| what is the version in package.json? | trivial | 1.00 | 274ms |
+| rename the variable `cnt` to `count` in src/a.ts | trivial | 0.89 | 193ms |
+| add a --dry-run flag to the deploy script and test it | standard | 0.65 | 185ms |
+| the payment webhook double-charges some customers; find out why and fix it | deep | 0.97 | 188ms |
+| ok continue | standard | 0.43 | 216ms |
+
+- `ok continue`(맥락 없는 첫 턴)는 확신도 0.43으로 minUpgradeConfidence 0.5 미만. 맥락이 없어 예상된 결과.
+- laya/kev: server not running — pending user check (`localhost:11435/api/tags` 무응답, `localhost:8009/v1/systemone` 연결 실패 000).
