@@ -104,6 +104,11 @@ function appliedFor(model: string | null, tier: Tier, config: Config, tables: Ta
   }
   // Model held: only the effort follows the tier, from the session model's column in table B.
   const effort = effortFor(tables, 'claude', model ?? '', tier);
+  if (model && effort === null) {
+    // A model without effort cannot be raised by effort alone, so move to the tier's own model.
+    const target = firstTarget(tables, 'claude', tier);
+    if (target.model !== model) return { model: target.model, effort: target.effort };
+  }
   return model ? { model, effort } : { effort };
 }
 
@@ -143,16 +148,19 @@ export function decideNextTurn(input: {
   record: SessionRecord;
   verdict: Verdict | null;
   repeatedFailures: number;
+  // The alias of the live main-loop model, used when the first turn left record.model unset.
+  sessionModel: string | null;
   config: Config;
   tables: Tables;
 }): Decision {
   const { record, verdict, config, tables } = input;
+  const model = record.model ?? input.sessionModel;
   const answer = verdict?.tier ?? null;
   const confidence = answer?.confidence ?? null;
   const hold = (reason: string, downStreak = 0): Decision => ({ record: { ...record, downStreak }, change: 'hold', confidence, reason });
   const move = (tier: Tier, change: Change, reason: string): Decision => {
-    const applied = appliedFor(record.model, tier, config, tables);
-    return { record: { ...record, tier, applied, model: applied.model ?? record.model, downStreak: 0 }, change, confidence, reason };
+    const applied = appliedFor(model, tier, config, tables);
+    return { record: { ...record, tier, applied, model: applied.model ?? model, downStreak: 0 }, change, confidence, reason };
   };
 
   if (record.pinned) return hold('pinned');
@@ -179,7 +187,9 @@ export function decideNextTurn(input: {
     return lower === current ? hold('at floor') : move(lower, 'down', 'easier steps');
   }
 
-  return hold('same tier');
+  if (!answer) return hold('no answer');
+  const bar = tierRank(answer.tier) > tierRank(current) ? config.minUpgradeConfidence : tierRank(answer.tier) < tierRank(current) ? config.minDowngradeConfidence : 0;
+  return hold(answer.confidence < bar ? 'low confidence' : 'same tier');
 }
 
 export function canAskJudge(record: SessionRecord, now: number): boolean {

@@ -29,8 +29,8 @@ function at(tier: Tier, extra: Partial<SessionRecord> = {}): SessionRecord {
   return { ...newRecord('task', now), tier, floor: 'quick', model: 'sonnet', applied: { model: 'sonnet', effort: 'medium' }, ...extra };
 }
 
-const next = (record: SessionRecord, v: Verdict | null, repeatedFailures = 0, c: Config = config) =>
-  decideNextTurn({ record, verdict: v, repeatedFailures, config: c, tables });
+const next = (record: SessionRecord, v: Verdict | null, repeatedFailures = 0, c: Config = config, sessionModel: string | null = null) =>
+  decideNextTurn({ record, verdict: v, repeatedFailures, sessionModel, config: c, tables });
 
 describe('pin', () => {
   it('detects and strips !pin, keeping the text when nothing is left', () => {
@@ -121,11 +121,30 @@ describe('decideNextTurn', () => {
     expect(d.record.tier).toBe('standard');
   });
 
-  it('sets a tier later when the first turn left it unset, effort only', () => {
-    const d = next(newRecord('t', now), verdict('deep', 0.7));
+  it('sets a tier later from the live session model when the first turn held', () => {
+    const d = next(newRecord('t', now), verdict('deep', 0.7), 0, config, 'sonnet');
     expect(d.change).toBe('set');
+    expect(d.record).toMatchObject({ tier: 'deep', floor: 'standard', model: 'sonnet', applied: { model: 'sonnet', effort: 'high' } });
+  });
+
+  it('falls back to effort only when the session model is unknown', () => {
+    const d = next(newRecord('t', now), verdict('deep', 0.7));
     expect(d.record).toMatchObject({ tier: 'deep', floor: 'standard', applied: { effort: 'xhigh' } });
     expect(d.record.applied?.model).toBeUndefined();
+  });
+
+  it('moves off a model that has no effort when raising', () => {
+    const haiku = at('trivial', { model: 'haiku', applied: { model: 'haiku', effort: null } });
+    const up = next(haiku, verdict('deep', 0.8));
+    expect(up.change).toBe('up');
+    expect(up.record.applied).toEqual({ model: 'opus', effort: 'xhigh' });
+    expect(up.record.model).toBe('opus');
+    expect(next(haiku, null, 3).record.applied).toEqual({ model: 'sonnet', effort: 'low' });
+  });
+
+  it('explains holds', () => {
+    expect(next(at('standard'), null).reason).toBe('no answer');
+    expect(next(at('standard'), verdict('deep', 0.4)).reason).toBe('low confidence');
   });
 
   it('holds a pinned session', () => {
