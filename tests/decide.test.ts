@@ -10,6 +10,7 @@ import {
   newRecord,
   noteJudgeOutcome,
   parseRecord,
+  statusParts,
   statusText,
   type SessionRecord,
 } from '../src/core/decide.js';
@@ -282,6 +283,21 @@ describe('records and status', () => {
     const haikuTables = mergeTables(tables, { claude: { models: { trivial: 'haiku' } } })!;
     const haiku = decideFirstTurn({ record: newRecord('t', now), floor: null, verdict: verdict('trivial', 0.9), config, tables: haikuTables });
     expect(statusText(haiku)).toBe('tiergear · trivial 0.90 → haiku/-');
+  });
+
+  it('builds the line from the parts asked for', () => {
+    const all = { tier: true, confidence: true, modelEffort: true, reason: true };
+    const up = next(at('quick'), verdict('deep', 0.91));
+    const held = next(at('quick'), verdict('quick', 0.62));
+    const current = { model: 'opus', effort: 'xhigh' };
+    expect(statusParts(up, current, all)).toBe('deep 0.91 → opus/xhigh');
+    expect(statusParts(held, current, all)).toBe('quick 0.62 · opus/xhigh · unchanged (same tier)');
+    expect(statusParts(up, current, { ...all, confidence: false })).toBe('deep → opus/xhigh');
+    expect(statusParts(up, current, { ...all, tier: false, confidence: false })).toBe('→ opus/xhigh');
+    expect(statusParts(held, current, { ...all, modelEffort: false })).toBe('quick 0.62 · unchanged (same tier)');
+    expect(statusParts(held, current, { tier: false, confidence: true, modelEffort: false, reason: true })).toBe('0.62 · unchanged (same tier)');
+    expect(statusParts(held, current, { ...all, reason: false })).toBe('quick 0.62 · opus/xhigh');
+    expect(statusParts(up, current, { tier: false, confidence: false, modelEffort: false, reason: true })).toBe('');
   });
 
   it('shows the model and effort in effect, on holds too', () => {

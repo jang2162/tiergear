@@ -148,7 +148,12 @@ Change these in `/config` (plugin options).
 | `firstTurnTimeoutMs` | preset | First-turn latency budget. At most 8000ms (the whole hook budget is 10s, so larger values are cut to 8000) |
 | `turnTimeoutMs` | preset | Later-turn latency budget. At most 8000ms |
 | `showRecentButton` | `true` | Show the **[ Recent ]** button above the prompt. Off: `/tiergear` still opens the pane |
-| `showStatusText` | `true` | Show the `tiergear · …` line above the prompt. Turn it off when a status line tool shows it (see [Status line tools](#status-line-tools-ccstatusline)) |
+| `showPrefix` | `true` | Start the band with `tiergear ·` |
+| `showStatusText` | `true` | Show the line's parts below (all four at once). Turn it off when a status line tool shows them (see [Status line tools](#status-line-tools-ccstatusline)) |
+| `showTier` | `true` | The tier, `deep` |
+| `showConfidence` | `true` | The judge's confidence, `0.91` (`n/d` without one) |
+| `showModelEffort` | `true` | The model and effort in effect, `opus/xhigh` (`→ opus/xhigh` when tiergear just applied them) |
+| `showReason` | `true` | Why nothing changed, `unchanged (same tier)` |
 | `showTierButtons` | `true` | Show the off and tier buttons above the prompt |
 
 ## Status band
@@ -179,7 +184,7 @@ Reasons for no change: `no answer` (no judge response), `low confidence`, `same 
 
 ### Recent decisions
 
-Press **[ Recent ]** to open a pane listing this session's decisions, newest first, and press it again to close it. `/tiergear` opens the pane too. To hide the button, turn off `showRecentButton` in the plugin options. Each part of the band has its own option (`showStatusText`, `showTierButtons`, `showRecentButton`); with all three off the band draws nothing.
+Press **[ Recent ]** to open a pane listing this session's decisions, newest first, and press it again to close it. `/tiergear` opens the pane too. To hide the button, turn off `showRecentButton` in the plugin options. Each part of the band has its own option (`showPrefix`, `showStatusText` and the line's parts, `showTierButtons`, `showRecentButton`); with all of them off the band draws nothing.
 
 ```
 12:11  judge quick 0.44 → hold deep (low confidence) · opus/xhigh

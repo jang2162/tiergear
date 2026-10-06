@@ -18,6 +18,11 @@ describe('resolveConfig', () => {
       showRecentButton: true,
       showStatusText: true,
       showTierButtons: true,
+      showPrefix: true,
+      showTier: true,
+      showConfidence: true,
+      showModelEffort: true,
+      showReason: true,
     });
   });
 

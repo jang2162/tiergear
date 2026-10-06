@@ -282,13 +282,30 @@ function inEffectText(current: InEffect): string {
   return current.model ? `${current.model}/${effort}` : effort;
 }
 
-export function statusText(decision: Decision, current: InEffect | null = null): string {
+/** Which parts of the status line to show. */
+export interface StatusShow {
+  tier: boolean;
+  confidence: boolean;
+  modelEffort: boolean;
+  reason: boolean;
+}
+
+const SHOW_ALL: StatusShow = { tier: true, confidence: true, modelEffort: true, reason: true };
+
+// The line without its `tiergear ·` prefix: `deep 0.91 → opus/xhigh`, or `deep 0.62 · sonnet/medium · unchanged (same tier)`.
+export function statusParts(decision: Decision, current: InEffect | null, show: StatusShow): string {
   const { record, change, confidence, reason } = decision;
-  const tier = record.tier ?? 'unset';
-  const said = confidence === null ? 'n/d' : confidence.toFixed(2);
+  const head = [show.tier ? (record.tier ?? 'unset') : null, show.confidence ? (confidence === null ? 'n/d' : confidence.toFixed(2)) : null]
+    .filter((part) => part !== null)
+    .join(' ');
   if (change === 'hold' || !record.applied) {
-    const now = current ? ` · ${inEffectText(current)}` : '';
-    return `tiergear · ${tier} ${said}${now} · unchanged (${reason})`;
+    const now = show.modelEffort && current ? inEffectText(current) : '';
+    return [head, now, show.reason ? `unchanged (${reason})` : ''].filter((part) => part).join(' · ');
   }
-  return `tiergear · ${tier} ${said} → ${current ? inEffectText(current) : appliedText(record.applied)}`;
+  if (!show.modelEffort) return head;
+  return [head, `→ ${current ? inEffectText(current) : appliedText(record.applied)}`].filter((part) => part).join(' ');
+}
+
+export function statusText(decision: Decision, current: InEffect | null = null): string {
+  return `tiergear · ${statusParts(decision, current, SHOW_ALL)}`;
 }

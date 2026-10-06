@@ -18,7 +18,12 @@
     "firstTurnTimeoutMs": { "type": "number", "title": "First-turn latency budget (ms)", "description": "Leave unset for the preset's value. At most 8000." },
     "turnTimeoutMs": { "type": "number", "title": "Latency budget (ms)", "description": "Leave unset for the preset's value. At most 8000." },
     "showRecentButton": { "type": "boolean", "title": "Show Recent button", "description": "Show the [ Recent ] button above the prompt. Off: /tiergear still opens the pane.", "default": true },
-    "showStatusText": { "type": "boolean", "title": "Show status text", "description": "Show the tiergear line (tier, model/effort) above the prompt. Turn off if a status line tool shows it (tiergear status).", "default": true },
+    "showPrefix": { "type": "boolean", "title": "Show tiergear prefix", "description": "Start the band above the prompt with 'tiergear ·'.", "default": true },
+    "showStatusText": { "type": "boolean", "title": "Show status text", "description": "Show the line's tier, confidence, model/effort and reason above the prompt (each has its own option too). Turn off if a status line tool shows them (tiergear status).", "default": true },
+    "showTier": { "type": "boolean", "title": "Show tier", "description": "Show the tier in the line above the prompt.", "default": true },
+    "showConfidence": { "type": "boolean", "title": "Show confidence", "description": "Show the judge's confidence in the line above the prompt.", "default": true },
+    "showModelEffort": { "type": "boolean", "title": "Show model/effort", "description": "Show the model and effort in effect in the line above the prompt.", "default": true },
+    "showReason": { "type": "boolean", "title": "Show reason", "description": "Show why nothing changed, as 'unchanged (same tier)', in the line above the prompt.", "default": true },
     "showTierButtons": { "type": "boolean", "title": "Show tier buttons", "description": "Show the off and tier buttons above the prompt.", "default": true }
   }
 }

@@ -173,7 +173,21 @@ describe('band above the prompt', () => {
     leaves(((tree as Element).props.children as Element[])[1]!).map((p) => (p.type === 'Text' ? p.props.children : p.props.label));
 
   it('leaves the status text out when it is turned off, as a status line tool shows it', async () => {
-    expect(labels(await rowOf({ showStatusText: false }))).toEqual(['|', 'Tier:', 'off', 'trivial', 'quick', 'standard', '[deep]', 'max', '|', 'Recent']);
+    expect(labels(await rowOf({ showStatusText: false, showPrefix: false }))).toEqual(['|', 'Tier:', 'off', 'trivial', 'quick', 'standard', '[deep]', 'max', '|', 'Recent']);
+  });
+
+  const text = async (options: Record<string, unknown>) => labels(await rowOf({ showTierButtons: false, showRecentButton: false, ...options }));
+
+  it('shows only the parts of the line turned on, with or without the tiergear prefix', async () => {
+    expect(await text({})).toEqual(['tiergear · deep 0.80 → opus/xhigh']);
+    expect(await text({ showPrefix: false })).toEqual(['deep 0.80 → opus/xhigh']);
+    expect(await text({ showConfidence: false, showModelEffort: false })).toEqual(['tiergear · deep']);
+    expect(await text({ showTier: false, showModelEffort: false, showReason: false })).toEqual(['tiergear · 0.80']);
+    expect(await text({ showStatusText: false })).toEqual(['tiergear']);
+  });
+
+  it('puts the prefix ahead of the buttons when the line itself is off', async () => {
+    expect(labels(await rowOf({ showStatusText: false }))).toEqual(['tiergear', '|', 'Tier:', 'off', 'trivial', 'quick', 'standard', '[deep]', 'max', '|', 'Recent']);
   });
 
   it('leaves the tier buttons out when they are turned off', async () => {
@@ -181,7 +195,7 @@ describe('band above the prompt', () => {
   });
 
   it('draws nothing of its own when every part is turned off', async () => {
-    expect(await rowOf({ showStatusText: false, showTierButtons: false, showRecentButton: false })).toBe('BELOW');
+    expect(await rowOf({ showPrefix: false, showStatusText: false, showTierButtons: false, showRecentButton: false })).toBe('BELOW');
   });
 
   it('yields to a survey', async () => {

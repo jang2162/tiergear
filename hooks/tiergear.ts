@@ -14,6 +14,7 @@ import {
   newRecord,
   noteJudgeOutcome,
   parseRecord,
+  statusParts,
   statusText,
   type Applied,
   type Decision,
@@ -462,6 +463,20 @@ export function createTiergear(options: Readonly<Record<string, unknown>>) {
     config,
     applied: (session: string): Applied | null => sessions.get(session)?.applied ?? null,
     statusLine: (session: string): string | null => sessions.get(session)?.statusLine ?? null,
+    /** The band's text: the prefix and the parts of the line the options turn on; empty when none. */
+    bandText(session: string): string {
+      const mem = sessions.get(session);
+      const parts =
+        config.showStatusText && mem?.shown
+          ? statusParts(mem.shown, inEffect(mem.applied, mem.engine), {
+              tier: config.showTier,
+              confidence: config.showConfidence,
+              modelEffort: config.showModelEffort,
+              reason: config.showReason,
+            })
+          : '';
+      return [config.showPrefix ? 'tiergear' : '', parts].filter((part) => part).join(' · ');
+    },
     async recent(host: HookHost, limit: number): Promise<string[]> {
       try {
         const home = await host.env.get('HOME');
@@ -527,10 +542,11 @@ export const register: Register = (on: On, options: PluginOptions) => {
     if (e.props.hasSurvey) return below;
     const session = await $.session.id().catch(() => null);
     if (session === null) return below;
-    const { showStatusText, showTierButtons, showRecentButton } = tiergear.config;
-    if (!showStatusText && !showTierButtons && !showRecentButton) return below;
+    const { showTierButtons, showRecentButton } = tiergear.config;
+    const text = tiergear.bandText(session);
+    if (!text && !showTierButtons && !showRecentButton) return below;
     const { Box, Text, Button } = $.ui.resolve(e);
-    const parts = showStatusText ? [Text({ dimColor: true, children: tiergear.statusLine(session) ?? 'tiergear' })] : [];
+    const parts = text ? [Text({ dimColor: true, children: text })] : [];
     if (showTierButtons) {
       const { tier, paused } = await tiergear.controls(hostOf($));
       const chosen = paused ? OFF : tier;
