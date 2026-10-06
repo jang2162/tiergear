@@ -20,32 +20,34 @@ Only prompts the user typed are judged: terminal input (`composer`), Remote Cont
 Requires Claude Code 2.1.289 or later. At the prompt of a Claude Code session:
 
 ```
-/plugin install tiergear --marketplace jang2162/tiergear
+/plugin marketplace add jang2162/tiergear
+/plugin install tiergear@tiergear
 ```
 
-Answer `y` to add the marketplace, then pick a scope (user is first). The hooks run in that session at once and in every new session under that scope. `/plugin` lists it as `tiergear@tiergear`. Set the judge's key (`TYPESAFE_API_KEY` for jev) or pick another judge in the plugin options.
+Pick a scope when asked (user is first). The hooks run in that session at once and in every new session under that scope. `/plugin` lists it as `tiergear@tiergear`. The default judge, jev, needs a TypeSafe API key in `TYPESAFE_API_KEY` (your shell or user settings) or in the `judgeApiKey` option; without one it answers nothing and the [ Recent ] pane shows `judge no API key for jev`. Or pick a local judge (laya, kev) in the plugin options.
 
 To update: `claude plugin update tiergear@tiergear`, then `/reload-plugins`.
 
 ### CLI (optional)
 
-`tiergear launch`, `orca-spawn` and `stats` are a separate command-line tool; the hooks don't need it. Build it from a clone:
+`tiergear launch`, `tiergear orca-spawn`, `tiergear stats` and `tiergear status` are a separate command-line tool; the hooks don't need it. Requires Node 20 or later.
 
 ```bash
-git clone https://github.com/jang2162/tiergear.git ~/IdeaProjects/tiergear
-cd ~/IdeaProjects/tiergear
-npm install
-npm run build && npm link
+npm install -g tiergear
 ```
 
 `which tiergear` should print the CLI path.
 
 ### From a clone (development)
 
-To run the hooks from your working copy instead, so `/reload-plugins` picks up edits without an update:
+To run the hooks and the CLI from a working copy instead, so `/reload-plugins` picks up edits without an update:
 
 ```bash
-ln -s ~/IdeaProjects/tiergear ~/.claude/skills/tiergear
+git clone https://github.com/jang2162/tiergear.git
+cd tiergear
+npm install && npm run build && npm link
+mkdir -p ~/.claude/skills
+ln -s "$PWD" ~/.claude/skills/tiergear
 claude plugin list | grep -A3 tiergear
 ```
 
@@ -149,7 +151,7 @@ Change these in `/config` (plugin options).
 | `firstTurnTimeoutMs` | preset | First-turn latency budget. At most 8000ms (the whole hook budget is 10s, so larger values are cut to 8000) |
 | `turnTimeoutMs` | preset | Later-turn latency budget. At most 8000ms |
 | `showRecentButton` | `true` | Show the **[ Recent ]** button above the prompt. Off: `/tiergear` still opens the pane |
-| `showPrefix` | `true` | Start the band with `tiergear ·` |
+| `showPrefix` | `true` | Start the band with `tiergear` |
 | `showStatusText` | `true` | Show the line's parts below (all four at once). Turn it off when a status line tool shows them (see [Status line tools](#status-line-tools-ccstatusline)) |
 | `showTier` | `true` | The tier, `deep` |
 | `showConfidence` | `true` | The judge's confidence, `0.91` (`n/d` without one) |
@@ -160,13 +162,13 @@ Change these in `/config` (plugin options).
 
 ## Status band
 
-tiergear shows its state in one row just above the prompt: a line, then a button per tier, one for off, and **[ Recent ]**. The choice in effect is bracketed; the others are dim.
+tiergear shows its state in one row just above the prompt: a line, the **Tier** picker (off and a button per tier), the **Floor** picker, and **[ Recent ]**. The choice in effect is bracketed; the others are dim.
 
 ```
 tiergear · deep 0.91 → opus/xhigh  | Tier: off  ~~trivial~~  quick  standard  [deep]  max | Floor: quick |  [ Recent ]
 ```
 
-It doesn't use the status line below the prompt; a line an earlier version left there is cleared on the first judged prompt. Before anything is decided the line reads just `tiergear` and no button is bracketed.
+It doesn't use the status line below the prompt. Before anything is decided the line reads just `tiergear` and no button is bracketed.
 
 The line starts with `tiergear ·` and shows the model and effort the session is running on as `model/effort`; a model without effort shows `-`.
 
@@ -188,14 +190,14 @@ Reasons for no change: `no answer` (no judge response), `low confidence`, `same 
 
 ### Recent decisions
 
-Press **[ Recent ]** to open a pane listing this session's decisions, newest first, and press it again to close it. `/tiergear` opens the pane too. To hide the button, turn off `showRecentButton` in the plugin options. Each part of the band has its own option (`showPrefix`, `showStatusText` and the line's parts, `showTierButtons`, `showRecentButton`); with all of them off the band draws nothing.
+Press **[ Recent ]** to open a pane listing this session's decisions, newest first, and press it again to close it. `/tiergear` opens the pane too. To hide the button, turn off `showRecentButton` in the plugin options. Each part of the band has its own option (`showPrefix`, `showStatusText` and the line's parts, `showTierButtons`, `showFloor`, `showRecentButton`); with all of them off the band draws nothing.
 
 ```
 12:11  judge quick 0.44 → hold deep (low confidence) · opus/xhigh
 11:16  judge deep 0.52 → up deep (harder step) · opus/xhigh
 ```
 
-Each line is: time, what the judge proposed and its confidence, what tiergear did and the resulting tier (with the reason), and the model/effort tiergear applied (`session` when it applied nothing). `judge skipped` means the judge wasn't asked (a launch floor, a picked tier, off, a paused judge); a failure shows its reason, like `judge timeout`. A pick from the band (a tier or off) reads `manual` instead, as in `manual → set quick (manual tier) · opus/low`. `?` marks an entry logged before the proposal was recorded. The pane reads the decision log, so it still works after a plugin reload; the line comes back with the next judged prompt.
+Each line is: time, what the judge proposed and its confidence, what tiergear did and the resulting tier (with the reason), and the model/effort tiergear applied (`session` when it applied nothing). `judge skipped` means the judge wasn't asked (a launch floor, a picked tier, off, a paused judge); a failure shows its reason, like `judge timed out after 2000ms`. A pick from the band (a tier or off) reads `manual` instead, as in `manual → set quick (manual tier) · opus/low`. The pane reads the decision log, so it still works after a plugin reload; the line comes back with the next judged prompt.
 
 ### Status line tools (ccstatusline)
 
@@ -207,7 +209,7 @@ tiergear status [tier|state|model|effort] [--session <id>] [--json] [--format <t
 
 - The session is `--session`, else the `session_id` of the status JSON piped on stdin (what a status line command receives), else the session updated last.
 - Before tiergear has a value for the session (a new session, the first turn), the model and effort come from the status JSON on stdin, the session's own; the tier stays empty. A value tiergear doesn't know yet is filled the same way.
-- Default output: `deep · opus/xhigh`, `paused · sonnet/medium` when paused; nothing (exit 0) when the session has no decision yet, so a widget hides.
+- Default output: `deep · opus/xhigh`, `paused · sonnet/medium` when paused; nothing (exit 0) when neither tiergear nor the status JSON on stdin has a value, so a widget hides. The stdin fallback applies only without `--session`.
 - A field prints that value alone, for a widget of its own: `tiergear status model` prints `opus`, `tiergear status effort` prints `xhigh`, `tiergear status tier` prints `deep`, `tiergear status state` prints `auto` or `paused`. An unknown value prints nothing. A field wins over `--json` and `--format`.
 - `--format` fills `{tier}`, `{model}`, `{modelName}` (as Claude Code names it, `Opus 5.5`), `{effort}`, `{state}` (`auto` or `paused`) and `{line}` (the band's text); an unknown value is `-` (`unset` for the tier), and a template with no known value in it prints nothing. `--json` prints the whole record, or `null`.
 
@@ -225,7 +227,7 @@ tiergear status [tier|state|model|effort] [--session <id>] [--json] [--format <t
 ```
 
 - `launch`: judges the brief and prints the command to run (e.g. `claude --model opus --effort xhigh`). With Claude, `--worktree` writes a floor for that path. The path is stored as an absolute real path (symlinks resolved), so a relative path still works for a session opened in that folder. With `--agent codex`, floors are Claude-only, so none is written and a one-line note is printed instead.
-- `orca-spawn`: creates an Orca worktree, writes the floor, and starts the agent there with the judged model and effort. Prints the result as JSON. `--base-branch` picks the ref the worktree starts from; without it Orca uses the repo's default base, which may be a remote branch behind your local one. A brief that starts with `!` or `/` (which the agent's prompt would run as a shell or slash command) or holds control characters other than line breaks and tabs is refused before the judge is asked.
+- `orca-spawn`: needs Orca, the multi-agent IDE, with its `orca` CLI on your PATH (or named by `ORCA_CLI_COMMAND`). It creates an Orca worktree, writes the floor, and starts the agent there with the judged model and effort. Prints the result as JSON. `--base-branch` picks the ref the worktree starts from; without it Orca uses the repo's default base, which may be a remote branch behind your local one. A brief that starts with `!` or `/` (which the agent's prompt would run as a shell or slash command) or holds control characters other than line breaks and tabs is refused before the judge is asked.
   - **Inside an orchestration Run** (run from the coordinator terminal after `orca orchestration run-create`): starts the agent with `orca orchestration worker-start`, so the worker gets Orca's lifecycle preamble and reports `worker_done` to the Run. The JSON includes `dispatch` (`runId`, `taskId`, `dispatchId`, `handle`). A failed `worker-start` exits non-zero with Orca's error; don't rerun it blindly, since Orca may have left resources behind.
   - **Without a Run**: creates a terminal, waits for the agent, then types the brief as is (no preamble, `dispatch` is `null`). If Claude asks whether to trust the folder, **`orca-spawn` does not approve it for you.** Approve it yourself in Orca within 120 seconds. If the agent isn't ready, the brief is **not sent** (exit code 1) and a fallback shell may be left in the worktree.
   - The floor is written before the agent's first prompt in both cases. Without it, the first turn would be judged on Orca's preamble, which usually gives low confidence.
@@ -244,6 +246,7 @@ The CLI can't read plugin options, so it looks up settings from flags, then envi
 | `TIERGEAR_JUDGE_URL` | Judge address |
 | `TIERGEAR_JUDGE_MODEL` | Judge model |
 | `TIERGEAR_JUDGE_API_KEY` | Key (falls back to the preset's key env var, only for the preset's own address) |
+| `ORCA_CLI_COMMAND` | The `orca` executable `orca-spawn` runs (default `orca` on your PATH) |
 
 ## Where things are stored
 
@@ -251,8 +254,8 @@ The CLI can't read plugin options, so it looks up settings from flags, then envi
 | --- | --- |
 | Tables | `~/.config/tiergear/tables.json` |
 | Floors (valid 24 hours) | `~/.local/state/tiergear/floors/<fnv1a(worktree)>.json` |
-| Decision log (1000 lines per file) | `~/.local/state/tiergear/decisions/<name>.jsonl` |
-| Status for status line tools (one small file per session) | `~/.local/state/tiergear/status/<session>.json` |
+| Decision log (1000 lines per file; one file per session, not removed) | `~/.local/state/tiergear/decisions/<name>.jsonl` |
+| Status for status line tools (one small file per session, not removed) | `~/.local/state/tiergear/status/<session>.json` |
 | Session records (kept 7 days, newest 200) | Plugin `$.store` under `session:<id>` (the first prompt is truncated to 2000 characters, and dropped while a session is paused) |
 
 Raw prompt text is never written to the logs.
@@ -269,13 +272,21 @@ Raw prompt text is never written to the logs.
 - First turn: the first prompt (only the start and end if long).
 - Later turns: the next prompt, the last 3 exchanges, the first prompt (up to 500 characters), the number of files edited, the repeated failure count, and the current tier and effort.
   - An exchange is one prompt, the assistant's last words before the next prompt, and the names of the tools it used. Tool calls and their results are folded into it, so a busy turn doesn't push the conversation out of view.
-  - Recent text gets more room: the reply the next prompt answers is sent up to 1500 characters, keeping mostly its end, where a question usually sits. Older prompts and replies get 400 characters each. Longer text keeps its start and end.
+  - Recent text gets more room: the reply the next prompt answers is sent up to 1500 characters, keeping mostly its end, where a question usually sits. Prompts and older replies get 400 characters each. Longer text keeps its start and end.
 - jev sends data externally (TypeSafe). laya and kev stay on your local server (if you run kev on Modal, data goes there).
 - Prompts that aren't judged (see "Which prompts are judged" above) never go to the judge as the prompt being judged, but one can still appear among the recent exchanges: a task notification or a message from another session is a prompt in the conversation too. Nothing is masked, so with jev that text leaves your machine.
 
 ## Limitations
 
 - Codex gets its model and effort only at launch (`launch`/`orca-spawn`). Mid-session adjustment works only in Claude Code.
-- Hooks are an early-access feature, so the contract can change with Claude Code updates. `types/claude-code.d.ts` is the declaration file generated by Claude Code 2.1.289. After an update, replace it with the `.claude-plugin/types/claude-code/index.d.ts` the engine writes next to the plugin.
+- Hooks are an early-access feature, so the contract can change with Claude Code updates.
 - The confidence thresholds (0.5, 0.85, 0.6) are tuned for Jev. For other judges, check response rate and latency with `tiergear stats` and adjust the options.
 - Subagent requests are left alone; only main-loop requests are changed.
+
+## Development
+
+`npm test`, `npm run typecheck` and `npm run validate:plugin` check a working copy. `types/claude-code.d.ts` is the hook API declaration Claude Code 2.1.289 generated; after a Claude Code update, replace it with the `.claude-plugin/types/claude-code/index.d.ts` the engine writes next to a loaded plugin.
+
+## License
+
+MIT

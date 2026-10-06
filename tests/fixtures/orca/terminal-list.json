@@ -5,11 +5,11 @@
     "terminals": [
       {
         "handle": "term_be732e8a-f7ad-428c-ae36-b127b9bdffdc",
-        "ptyId": "8db22c76-2921-46d5-a9c5-efd9d698eaf4::/Users/jang2162/IdeaProjects/tiergear/.worktrees/tiergear/tiergear-probe@@2a830277",
+        "ptyId": "8db22c76-2921-46d5-a9c5-efd9d698eaf4::/home/user/project/.worktrees/tiergear/tiergear-probe@@2a830277",
         "incarnationId": "b9d26f94-f15d-4592-b442-cb42dbaa86ec",
         "orphaned": false,
-        "worktreeId": "8db22c76-2921-46d5-a9c5-efd9d698eaf4::/Users/jang2162/IdeaProjects/tiergear/.worktrees/tiergear/tiergear-probe",
-        "worktreePath": "/Users/jang2162/IdeaProjects/tiergear/.worktrees/tiergear/tiergear-probe",
+        "worktreeId": "8db22c76-2921-46d5-a9c5-efd9d698eaf4::/home/user/project/.worktrees/tiergear/tiergear-probe",
+        "worktreePath": "/home/user/project/.worktrees/tiergear/tiergear-probe",
         "branch": "",
         "tabId": "4bdf7a03-bd5a-4668-9f87-6f32c173e366",
         "leafId": "8c2a046d-4aa9-41e7-b7b9-362bd025e212",
@@ -23,20 +23,20 @@
       },
       {
         "handle": "term_42b24dc8-536a-4c4d-ac6b-58987d3ad305",
-        "ptyId": "8db22c76-2921-46d5-a9c5-efd9d698eaf4::/Users/jang2162/IdeaProjects/tiergear/.worktrees/tiergear/tiergear-probe@@ef0d7656",
+        "ptyId": "8db22c76-2921-46d5-a9c5-efd9d698eaf4::/home/user/project/.worktrees/tiergear/tiergear-probe@@ef0d7656",
         "incarnationId": "eac7839d-0b41-4b27-ac3c-c81bbca158d6",
         "orphaned": true,
         "recordedPaneKey": "9535acc3-cb60-4b37-b4ba-2dc98423ebc5:a3b0b292-76b8-4485-a75a-db692f443e11",
-        "worktreeId": "8db22c76-2921-46d5-a9c5-efd9d698eaf4::/Users/jang2162/IdeaProjects/tiergear/.worktrees/tiergear/tiergear-probe",
-        "worktreePath": "/Users/jang2162/IdeaProjects/tiergear/.worktrees/tiergear/tiergear-probe",
+        "worktreeId": "8db22c76-2921-46d5-a9c5-efd9d698eaf4::/home/user/project/.worktrees/tiergear/tiergear-probe",
+        "worktreePath": "/home/user/project/.worktrees/tiergear/tiergear-probe",
         "branch": "",
-        "tabId": "pty:8db22c76-2921-46d5-a9c5-efd9d698eaf4::/Users/jang2162/IdeaProjects/tiergear/.worktrees/tiergear/tiergear-probe@@ef0d7656",
-        "leafId": "pty:8db22c76-2921-46d5-a9c5-efd9d698eaf4::/Users/jang2162/IdeaProjects/tiergear/.worktrees/tiergear/tiergear-probe@@ef0d7656",
+        "tabId": "pty:8db22c76-2921-46d5-a9c5-efd9d698eaf4::/home/user/project/.worktrees/tiergear/tiergear-probe@@ef0d7656",
+        "leafId": "pty:8db22c76-2921-46d5-a9c5-efd9d698eaf4::/home/user/project/.worktrees/tiergear/tiergear-probe@@ef0d7656",
         "title": "..iergear-probe",
         "connected": true,
         "writable": true,
         "lastOutputAt": 1791246841130,
-        "preview": "~/IdeaP/tiergear/.w/t/tiergear-probe on jang2162/tiergear-probe ❯                                        at 09:34:01 AM",
+        "preview": "~/project ❯",
         "executionHostId": "local"
       }
     ],
@@ -65,7 +65,7 @@
       ]
     },
     "topologyRevisions": {
-      "8db22c76-2921-46d5-a9c5-efd9d698eaf4::/Users/jang2162/IdeaProjects/tiergear/.worktrees/tiergear/tiergear-probe": 2
+      "8db22c76-2921-46d5-a9c5-efd9d698eaf4::/home/user/project/.worktrees/tiergear/tiergear-probe": 2
     },
     "totalCount": 2,
     "truncated": false

@@ -6,9 +6,9 @@
   "license": "MIT",
   "userConfig": {
     "judge": { "type": "string", "title": "Judge", "description": "Decision model preset: jev, laya or kev.", "options": ["jev", "laya", "kev"], "default": "jev" },
-    "judgeBaseUrl": { "type": "string", "title": "Judge base URL", "description": "Leave unset for the preset's address." },
+    "judgeBaseUrl": { "type": "string", "title": "Judge base URL", "description": "Leave unset for the preset's address. Must be https, or http to localhost." },
     "judgeModel": { "type": "string", "title": "Judge model", "description": "Leave unset for the preset's model." },
-    "judgeApiKey": { "type": "string", "title": "Judge API key", "description": "Leave unset to use the preset's environment variable (TYPESAFE_API_KEY, OLLAYA_API_KEY, KEV_API_KEY).", "sensitive": true },
+    "judgeApiKey": { "type": "string", "title": "Judge API key", "description": "Leave unset to use the preset's environment variable (TYPESAFE_API_KEY, OLLAYA_API_KEY, KEV_API_KEY), which is sent only to the preset's own address.", "sensitive": true },
     "switchModelMidSession": { "type": "boolean", "title": "Switch model mid-session", "description": "After the first turn, also change the model (breaks the prompt cache). Off: only effort changes.", "default": false },
     "instantSwitchConfidence": { "type": "number", "title": "Confidence · instant switch", "description": "A lower tier the judge is at least this sure of applies at once, skipping 'Turns to lower'. Leave unset (or 0) to turn it off." },
     "minDowngradeConfidence": { "type": "number", "title": "Confidence · lower", "description": "Minimum judge confidence for a turn to count toward lowering the tier.", "default": 0.85 },

@@ -2,3 +2,5 @@ node_modules/
 dist/
 .DS_Store
 .superpowers/
+.worktrees/
+.claude/settings.local.json

@@ -3,7 +3,7 @@
   "ok": true,
   "result": {
     "worktree": {
-      "id": "8db22c76-2921-46d5-a9c5-efd9d698eaf4::/Users/jang2162/IdeaProjects/tiergear/.worktrees/tiergear/tiergear-probe",
+      "id": "8db22c76-2921-46d5-a9c5-efd9d698eaf4::/home/user/project/.worktrees/tiergear/tiergear-probe",
       "identity": {
         "key": "wt2:local:1f575190-b26f-4170-9e32-ac3709e8b960",
         "executionHostId": "local",
@@ -11,15 +11,15 @@
       },
       "instanceId": "1f575190-b26f-4170-9e32-ac3709e8b960",
       "repoId": "8db22c76-2921-46d5-a9c5-efd9d698eaf4",
-      "projectId": "github:jang2162/tiergear",
+      "projectId": "github:user/tiergear",
       "hostId": "local",
       "projectHostSetupId": "8db22c76-2921-46d5-a9c5-efd9d698eaf4",
       "creatorProvenance": {
         "kind": "host"
       },
-      "path": "/Users/jang2162/IdeaProjects/tiergear/.worktrees/tiergear/tiergear-probe",
+      "path": "/home/user/project/.worktrees/tiergear/tiergear-probe",
       "head": "42f2de682120b9350a3d5c32efee87660f287cf3",
-      "branch": "refs/heads/jang2162/tiergear-probe",
+      "branch": "refs/heads/user/tiergear-probe",
       "isBare": false,
       "isMainWorktree": false,
       "displayName": "tiergear-probe",
@@ -54,9 +54,9 @@
       "lineage": null,
       "workspaceLineage": null,
       "git": {
-        "path": "/Users/jang2162/IdeaProjects/tiergear/.worktrees/tiergear/tiergear-probe",
+        "path": "/home/user/project/.worktrees/tiergear/tiergear-probe",
         "head": "42f2de682120b9350a3d5c32efee87660f287cf3",
-        "branch": "refs/heads/jang2162/tiergear-probe",
+        "branch": "refs/heads/user/tiergear-probe",
         "isBare": false,
         "isMainWorktree": false
       }
