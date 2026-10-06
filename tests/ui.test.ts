@@ -176,7 +176,7 @@ describe('band above the prompt', () => {
     );
 
   it('leaves the status text out when it is turned off, as a status line tool shows it', async () => {
-    expect(labels(await rowOf({ showStatusText: false, showPrefix: false }))).toEqual(['|', 'Tier:', 'off', '~trivial~', '~quick~', 'standard', '[deep]', 'max', '|', 'Floor: standard', '|', 'Recent']);
+    expect(labels(await rowOf({ showStatusText: false, showPrefix: false }))).toEqual(['|', 'Tier::', 'off', '~trivial~', '~quick~', 'standard', '[deep]', 'max', '|', 'Floor: standard', '|', 'Recent']);
   });
 
   const text = async (options: Record<string, unknown>) => labels(await rowOf({ showTierButtons: false, showFloor: false, showRecentButton: false, ...options }));
@@ -190,13 +190,13 @@ describe('band above the prompt', () => {
   });
 
   it('puts the prefix ahead of the buttons when the line itself is off', async () => {
-    expect(labels(await rowOf({ showStatusText: false }))).toEqual(['tiergear', '|', 'Tier:', 'off', '~trivial~', '~quick~', 'standard', '[deep]', 'max', '|', 'Floor: standard', '|', 'Recent']);
+    expect(labels(await rowOf({ showStatusText: false }))).toEqual(['tiergear', '|', 'Tier::', 'off', '~trivial~', '~quick~', 'standard', '[deep]', 'max', '|', 'Floor: standard', '|', 'Recent']);
   });
 
   it('leaves the tier buttons out when they are turned off', async () => {
     expect(labels(await rowOf({ showTierButtons: false }))).toEqual(['tiergear · deep 0.80 → opus/xhigh', '|', 'Floor: standard', '|', 'Recent']);
     expect(labels(await rowOf({ showTierButtons: false, showFloor: false }))).toEqual(['tiergear · deep 0.80 → opus/xhigh', 'Recent']);
-    expect(labels(await rowOf({ showFloor: false, showStatusText: false, showPrefix: false }))).toEqual(['|', 'Tier:', 'off', '~trivial~', '~quick~', 'standard', '[deep]', 'max', '|', 'Recent']);
+    expect(labels(await rowOf({ showFloor: false, showStatusText: false, showPrefix: false }))).toEqual(['|', 'Tier::', 'off', '~trivial~', '~quick~', 'standard', '[deep]', 'max', '|', 'Recent']);
   });
 
   it('sets the floor from its picker, which frees the tiers under the old one', async () => {
@@ -207,7 +207,7 @@ describe('band above the prompt', () => {
     const picker = leaves((tree.props.children as Element[])[1]!).find((p) => p.type === 'Select')!;
     expect(picker.props.options).toEqual(['trivial', 'quick', 'standard', 'deep', 'max'].map((value) => ({ value })));
     await (picker.props.onSelect as (value: string) => Promise<void>)('trivial');
-    expect(labels(await hook('ui.render', { component: 'AbovePrompt' })($, band(), below))).toEqual(['|', 'Tier:', 'off', 'trivial', 'quick', 'standard', '[deep]', 'max', '|', 'Floor: trivial', '|']);
+    expect(labels(await hook('ui.render', { component: 'AbovePrompt' })($, band(), below))).toEqual(['|', 'Tier::', 'off', 'trivial', 'quick', 'standard', '[deep]', 'max', '|', 'Floor: trivial', '|']);
   });
 
   it('draws nothing of its own when every part is turned off', async () => {
