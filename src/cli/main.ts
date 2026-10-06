@@ -5,14 +5,16 @@ import { appendDecision, readDecisions, readTables, writeFloorFile } from './fil
 import { cliJudgeOptions } from './judge.js';
 import { parseTierRange, planLaunch, type LaunchPlan } from './launch.js';
 import { createOrcaExec } from './orca.js';
-import { homeDir, nodeSleep, nodeTransport } from './node.js';
+import { homeDir, nodeSleep, nodeTransport, readStdin } from './node.js';
 import { briefProblem, spawnWorker } from './spawn.js';
 import { summarize } from './stats.js';
+import { statusCommand } from './status.js';
 
 export const USAGE = `usage:
   tiergear launch "<brief>" [--agent claude|codex] [--worktree <path>] [--min-tier <tier>] [--max-tier <tier>] [--judge jev|laya|kev] [--judge-url <url>] [--judge-model <name>]
   tiergear orca-spawn "<brief>" --name <task> [--agent claude|codex] [--repo <dir>] [--base-branch <ref>] [--min-tier <tier>] [--max-tier <tier>] [--judge ...]
   tiergear stats [days]
+  tiergear status [--session <id>] [--json] [--format <template>]
   <tier> is one of trivial|quick|standard|deep|max`;
 
 async function plan(
@@ -65,9 +67,18 @@ export async function main(argv: string[]): Promise<number> {
       'judge-model': { type: 'string' },
       'min-tier': { type: 'string' },
       'max-tier': { type: 'string' },
+      session: { type: 'string' },
+      json: { type: 'boolean', default: false },
+      format: { type: 'string' },
     },
   });
   const home = homeDir();
+
+  if (command === 'status') {
+    const out = await statusCommand({ home, session: values.session, stdin: () => readStdin(500), json: values.json, format: values.format });
+    if (out) console.log(out);
+    return 0;
+  }
 
   if (command === 'stats') {
     const days = Number(positionals[0] ?? 7);
