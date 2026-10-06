@@ -9,12 +9,13 @@ import { homeDir, nodeSleep, nodeTransport, readStdin } from './node.js';
 import { briefProblem, spawnWorker } from './spawn.js';
 import { summarize } from './stats.js';
 import { statusCommand } from './status.js';
+import { isStatusField } from '../core/status.js';
 
 export const USAGE = `usage:
   tiergear launch "<brief>" [--agent claude|codex] [--worktree <path>] [--min-tier <tier>] [--max-tier <tier>] [--judge jev|laya|kev] [--judge-url <url>] [--judge-model <name>]
   tiergear orca-spawn "<brief>" --name <task> [--agent claude|codex] [--repo <dir>] [--base-branch <ref>] [--min-tier <tier>] [--max-tier <tier>] [--judge ...]
   tiergear stats [days]
-  tiergear status [--session <id>] [--json] [--format <template>]
+  tiergear status [tier|state|model|effort] [--session <id>] [--json] [--format <template>]
   <tier> is one of trivial|quick|standard|deep|max`;
 
 async function plan(
@@ -75,7 +76,12 @@ export async function main(argv: string[]): Promise<number> {
   const home = homeDir();
 
   if (command === 'status') {
-    const out = await statusCommand({ home, session: values.session, stdin: () => readStdin(500), json: values.json, format: values.format });
+    const field = positionals[0];
+    if (positionals.length > 1 || (field !== undefined && !isStatusField(field))) {
+      console.error(USAGE);
+      return 2;
+    }
+    const out = await statusCommand({ home, session: values.session, stdin: () => readStdin(500), json: values.json, format: values.format, field });
     if (out) console.log(out);
     return 0;
   }

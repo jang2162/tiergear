@@ -1,6 +1,6 @@
 import { readFile, readdir } from 'node:fs/promises';
 import { join } from 'node:path';
-import { formatStatus, parseStatus, statusDir, statusPath, type StatusRecord } from '../core/status.js';
+import { formatStatus, parseStatus, statusDir, statusField, statusPath, type StatusField, type StatusRecord } from '../core/status.js';
 
 // A status line command gets Claude Code's status JSON on stdin, which names the session.
 function sessionFromStdin(text: string | null): string | undefined {
@@ -35,9 +35,12 @@ export async function statusCommand(p: {
   stdin: () => Promise<string | null>;
   json: boolean;
   format?: string;
+  // One value alone; it wins over --json and --format.
+  field?: StatusField;
 }): Promise<string> {
   const session = p.session ?? sessionFromStdin(await p.stdin());
   const status = session === undefined ? await newestStatus(p.home) : await readStatus(statusPath(p.home, session));
+  if (p.field) return status ? statusField(status, p.field) : '';
   if (p.json) return JSON.stringify(status);
   return status ? formatStatus(status, p.format) : '';
 }

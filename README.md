@@ -186,14 +186,15 @@ Each line is: time, what the judge proposed and its confidence, what tiergear di
 Claude Code's status JSON reports the session's own model and effort, not what tiergear applies per request, so a status line built from it misses tiergear's changes. The hook writes what the band shows to `~/.local/state/tiergear/status/<session>.json`, and `tiergear status` prints it:
 
 ```bash
-tiergear status [--session <id>] [--json] [--format <template>]
+tiergear status [tier|state|model|effort] [--session <id>] [--json] [--format <template>]
 ```
 
 - The session is `--session`, else the `session_id` of the status JSON piped on stdin (what a status line command receives), else the session updated last.
 - Default output: `deep · opus/xhigh`, `paused · sonnet/medium` when paused; nothing (exit 0) when the session has no decision yet, so a widget hides.
+- A field prints that value alone, for a widget of its own: `tiergear status model` prints `opus`, `tiergear status effort` prints `xhigh`, `tiergear status tier` prints `deep`, `tiergear status state` prints `auto` or `paused`. An unknown value prints nothing. A field wins over `--json` and `--format`.
 - `--format` fills `{tier}`, `{model}`, `{effort}`, `{state}` (`auto` or `paused`) and `{line}` (the band's text); an unknown value is `-` (`unset` for the tier). `--json` prints the whole record, or `null`.
 
-In [ccstatusline](https://github.com/sirmalloc/ccstatusline), add a **Custom Command** widget with the command `tiergear status` (the CLI must be installed, see [CLI](#cli-optional)). It runs in about 50ms, well within the widget's default 1000ms timeout. The value follows a pick or a judged prompt at the next status line refresh.
+In [ccstatusline](https://github.com/sirmalloc/ccstatusline), add a **Custom Command** widget with the command `tiergear status`, or one widget per value (`tiergear status model`, `tiergear status effort`, ...) to color them apart (the CLI must be installed, see [CLI](#cli-optional)). It runs in about 50ms, well within the widget's default 1000ms timeout. The value follows a pick or a judged prompt at the next status line refresh.
 
 ## CLI
 
@@ -201,7 +202,7 @@ In [ccstatusline](https://github.com/sirmalloc/ccstatusline), add a **Custom Com
 tiergear launch "<brief>" [--agent claude|codex] [--worktree <path>] [--min-tier <tier>] [--max-tier <tier>] [--judge jev|laya|kev] [--judge-url <url>] [--judge-model <name>]
 tiergear orca-spawn "<brief>" --name <task> [--agent claude|codex] [--repo <dir>] [--base-branch <ref>] [--min-tier <tier>] [--max-tier <tier>] [--judge ...]
 tiergear stats [days]
-tiergear status [--session <id>] [--json] [--format <template>]
+tiergear status [tier|state|model|effort] [--session <id>] [--json] [--format <template>]
 ```
 
 - `launch`: judges the brief and prints the command to run (e.g. `claude --model opus --effort xhigh`). With Claude, `--worktree` writes a floor for that path. The path is stored as an absolute real path (symlinks resolved), so a relative path still works for a session opened in that folder. With `--agent codex`, floors are Claude-only, so none is written and a one-line note is printed instead.

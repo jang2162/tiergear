@@ -37,6 +37,20 @@ export function parseStatus(text: string): StatusRecord | null {
   return { session, tier, model, effort, paused, reason, line, updatedAt };
 }
 
+export const STATUS_FIELDS = ['tier', 'state', 'model', 'effort'] as const;
+export type StatusField = (typeof STATUS_FIELDS)[number];
+
+export function isStatusField(value: unknown): value is StatusField {
+  return typeof value === 'string' && (STATUS_FIELDS as readonly string[]).includes(value);
+}
+
+// One value for a widget of its own; empty when not known, so the widget hides.
+export function statusField(status: StatusRecord, field: StatusField): string {
+  if (field === 'state') return status.paused ? 'paused' : 'auto';
+  const value = status[field];
+  return value === null ? '' : String(value);
+}
+
 // Placeholders: {tier} {model} {effort} {state} (auto or paused) {line} (the band's text).
 export function formatStatus(status: StatusRecord, template?: string): string {
   if (template !== undefined) {

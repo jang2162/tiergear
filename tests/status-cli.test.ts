@@ -47,6 +47,15 @@ describe('statusCommand', () => {
     expect(await run(await homeWith())).toBe('');
   });
 
+  it('prints one value when a field is named', async () => {
+    const home = await homeWith(record('s1', { paused: true, model: 'sonnet', effort: 'medium' }));
+    expect(await run(home, { session: 's1', field: 'model' })).toBe('sonnet');
+    expect(await run(home, { session: 's1', field: 'effort' })).toBe('medium');
+    expect(await run(home, { session: 's1', field: 'state' })).toBe('paused');
+    expect(await run(home, { session: 's1', field: 'tier' })).toBe('deep');
+    expect(await run(home, { session: 'other', field: 'model' })).toBe('');
+  });
+
   it('prints the whole record as JSON, or fills a template', async () => {
     const home = await homeWith(record('s1'));
     expect(JSON.parse(await run(home, { session: 's1', json: true }))).toEqual(record('s1'));
@@ -68,5 +77,18 @@ describe('tiergear status', () => {
     expect(await main(['status', '--session', 's1'])).toBe(0);
     expect(await main(['status', '--session', 'nope'])).toBe(0);
     expect(logs).toEqual(['deep · opus/xhigh']);
+  });
+
+  it('prints the field named after status, and refuses an unknown one', async () => {
+    process.env['HOME'] = await homeWith(record('s1'));
+    const logs: string[] = [];
+    const errors: string[] = [];
+    vi.spyOn(console, 'log').mockImplementation((line: string) => void logs.push(line));
+    vi.spyOn(console, 'error').mockImplementation((line: string) => void errors.push(line));
+    expect(await main(['status', 'effort', '--session', 's1'])).toBe(0);
+    expect(await main(['status', 'model', '--session', 's1'])).toBe(0);
+    expect(logs).toEqual(['xhigh', 'opus']);
+    expect(await main(['status', 'colour', '--session', 's1'])).toBe(2);
+    expect(errors.join('\n')).toContain('tiergear status [tier|state|model|effort]');
   });
 });
