@@ -7,6 +7,7 @@ import {
   decideNextTurn,
   decidePause,
   decidePick,
+  decideSetFloor,
   newRecord,
   noteJudgeOutcome,
   parseRecord,
@@ -253,6 +254,40 @@ describe('manual controls', () => {
     const d = decidePause(at('deep', { downStreak: 1 }));
     expect(d).toMatchObject({ change: 'hold', reason: 'paused', confidence: null });
     expect(d.record).toMatchObject({ pinned: true, applied: null, downStreak: 0, tier: 'deep' });
+  });
+});
+
+describe('floor set by hand', () => {
+  const setFloor = (record: SessionRecord, floor: Tier, sessionModel: string | null = null) => decideSetFloor({ record, floor, sessionModel, config, tables });
+
+  it('lowers the floor and leaves the tier and what runs alone', () => {
+    const d = setFloor(at('deep', { floor: 'standard' }), 'trivial');
+    expect(d).toMatchObject({ change: 'hold', reason: 'floor set', confidence: null });
+    expect(d.record).toMatchObject({ tier: 'deep', floor: 'trivial', applied: { model: 'sonnet', effort: 'medium' } });
+  });
+
+  it('raises the tier to a floor set above it', () => {
+    const d = setFloor(at('quick', { floor: 'trivial' }), 'deep');
+    expect(d).toMatchObject({ change: 'up', reason: 'floor set' });
+    expect(d.record).toMatchObject({ tier: 'deep', floor: 'deep', applied: { model: 'sonnet', effort: 'high' } });
+  });
+
+  it('keeps the floor under a launch ceiling', () => {
+    expect(setFloor(at('quick', { ceiling: 'standard' }), 'max').record).toMatchObject({ floor: 'standard', tier: 'standard' });
+  });
+
+  it('only stores the floor while paused or before any tier', () => {
+    const paused = setFloor(at('quick', { pinned: true, applied: null }), 'deep');
+    expect(paused.record).toMatchObject({ tier: 'quick', floor: 'deep', pinned: true, applied: null });
+    expect(setFloor(newRecord('t', now), 'deep').record).toMatchObject({ tier: null, floor: 'deep', applied: null });
+  });
+
+  it('starts the first decided tier no lower than a floor set before it', () => {
+    const floored = setFloor(newRecord('t', now), 'deep').record;
+    const first = decideFirstTurn({ record: floored, floor: null, verdict: verdict('quick', 0.9), config, tables });
+    expect(first.record).toMatchObject({ tier: 'deep', floor: 'deep' });
+    const later = next(floored, verdict('trivial', 0.9));
+    expect(later.record).toMatchObject({ tier: 'deep', floor: 'deep' });
   });
 });
 

@@ -156,13 +156,14 @@ Change these in `/config` (plugin options).
 | `showModelEffort` | `true` | The model and effort in effect, `opus/xhigh` (`→ opus/xhigh` when tiergear just applied them) |
 | `showReason` | `true` | Why nothing changed, `unchanged (same tier)` |
 | `showTierButtons` | `true` | Show the off and tier buttons above the prompt |
+| `showFloor` | `true` | Show the floor picker above the prompt |
 
 ## Status band
 
 tiergear shows its state in one row just above the prompt: a line, then a button per tier, one for off, and **[ Recent ]**. The choice in effect is bracketed; the others are dim.
 
 ```
-tiergear · deep 0.91 → opus/xhigh  | Tier: off  trivial  quick  standard  [deep]  max |  [ Recent ]
+tiergear · deep 0.91 → opus/xhigh  | Tier: off  ~~trivial~~  quick  standard  [deep]  max | Floor: quick |  [ Recent ]
 ```
 
 It doesn't use the status line below the prompt; a line an earlier version left there is cleared on the first judged prompt. Before anything is decided the line reads just `tiergear` and no button is bracketed.
@@ -174,9 +175,11 @@ The line starts with `tiergear ·` and shows the model and effort the session is
 - The line is set when a prompt is judged, then refreshed with the values the engine reports when the turn starts. Before the session's first turn the values may not be known yet: an unchanged line then leaves them out, and an applied line shows only the effort if tiergear isn't setting the model.
 - `unset` appears when no tier has been decided yet, and `n/d` takes the place of the confidence when the judge gave no answer (as after a pick from the band).
 
-Reasons for no change: `no answer` (no judge response), `low confidence`, `same tier`, `paused` (off is chosen), `manual tier` (the first prompt runs on a tier picked before it), `at floor` (can't go lower), `at ceiling` (can't go higher than the launch's `--max-tier`), `easier step N/M` (Nth lowering candidate, M needed), `stuck at max`.
+Reasons for no change: `no answer` (no judge response), `low confidence`, `same tier`, `paused` (off is chosen), `manual tier` (the first prompt runs on a tier picked before it), `floor set` (the floor was changed by hand), `at floor` (can't go lower), `at ceiling` (can't go higher than the launch's `--max-tier`), `easier step N/M` (Nth lowering candidate, M needed), `stuck at max`.
 
-### Tier buttons
+### Tier buttons and floor
+
+- **Floor** picks the lowest tier the session may go to. A tier above the current one raises the session to it at once. A tier under the floor is struck through and can't be clicked; lower the floor first. A floor above a launch's `--max-tier` stops at it. Set before the first prompt, the first decided tier starts no lower than it. The floor picker is a select: click or focus it, then use the arrow keys and Enter.
 
 - One click picks. A tier applies from the next request, even in the middle of a running turn. Mid-session only the effort changes (from the session model's column in table B), unless `switchModelMidSession` is on. The judge goes on from the picked tier by the usual rules. A pick below the floor lowers the floor to it. A pick may go above a launch's `--max-tier`, but the judge still won't raise past it.
 - Picked before the first prompt, a tier works like a launch tier: the first turn runs on its table A model and effort without asking the judge, and the judge takes over from the second prompt.

@@ -488,7 +488,7 @@ describe('band controls', () => {
     await tiergear.pick(host, 'quick');
     expect(await tiergear.step(host, engineStep('t1', 'claude-sonnet-5-5', 'medium', 1))).toMatchObject({ model: 'claude-opus-5-5', effort: 'low' });
     expect(tiergear.statusLine('s1')).toBe('tiergear · quick n/d → opus/low');
-    expect(await tiergear.controls(host)).toEqual({ tier: 'quick', paused: false });
+    expect(await tiergear.controls(host)).toMatchObject({ tier: 'quick', paused: false });
     expect((await tiergear.recent(host, 1))[0]).toContain('manual → set quick (manual tier) · opus/low');
     await tiergear.promptSubmit(host, typed('next'));
     expect(requests).toHaveLength(2);
@@ -497,7 +497,7 @@ describe('band controls', () => {
   it('uses a tier picked before the first prompt for that turn, then asks the judge', async () => {
     const { host, store, requests } = fakeHost([{ tier: ['trivial', 0.9], stuck: 0 }]);
     const tiergear = createTiergear({});
-    expect(await tiergear.controls(host)).toEqual({ tier: null, paused: false });
+    expect(await tiergear.controls(host)).toMatchObject({ tier: null, paused: false });
     await tiergear.pick(host, 'deep');
     expect(tiergear.applied('s1')).toEqual({ model: 'opus', effort: 'xhigh' });
     await tiergear.promptSubmit(host, typed('refactor the parser'));
@@ -524,11 +524,11 @@ describe('band controls', () => {
     const tiergear = createTiergear({});
     await tiergear.promptSubmit(host, typed('refactor the parser'));
     await tiergear.pause(host);
-    expect(await tiergear.controls(host)).toEqual({ tier: 'deep', paused: true });
+    expect(await tiergear.controls(host)).toMatchObject({ tier: 'deep', paused: true });
     await tiergear.promptSubmit(host, typed('keep going'));
     expect(requests).toHaveLength(1);
     await tiergear.pick(host, 'deep');
-    expect(await tiergear.controls(host)).toEqual({ tier: 'deep', paused: false });
+    expect(await tiergear.controls(host)).toMatchObject({ tier: 'deep', paused: false });
     expect(tiergear.applied('s1')).toEqual({ model: 'opus', effort: 'xhigh' });
     await tiergear.promptSubmit(host, typed('now the tests'));
     expect(requests).toHaveLength(2);
@@ -544,9 +544,21 @@ describe('band controls', () => {
     await tiergear.promptSubmit(host, typed('refactor the parser'));
     await tiergear.step(host, engineStep('t1'));
     await tiergear.step(host, engineStep('t2', 'claude-sonnet-5-5', 'high'));
-    expect(await tiergear.controls(host)).toEqual({ tier: 'deep', paused: true });
+    expect(await tiergear.controls(host)).toMatchObject({ tier: 'deep', paused: true });
     await tiergear.pick(host, 'deep');
     expect(tiergear.applied('s1')).toEqual({ model: 'sonnet', effort: 'high' });
+  });
+
+  it('sets the floor from the band, raising the tier to it, and shows it in the controls', async () => {
+    const { host, store } = fakeHost([{ tier: ['quick', 0.8] }]);
+    const tiergear = createTiergear({});
+    await tiergear.promptSubmit(host, typed('rename it'));
+    expect(await tiergear.controls(host)).toEqual({ tier: 'quick', paused: false, floor: 'trivial' });
+    await tiergear.setFloor(host, 'deep');
+    expect(await tiergear.controls(host)).toEqual({ tier: 'deep', paused: false, floor: 'deep' });
+    expect(tiergear.applied('s1')).toEqual({ model: 'sonnet', effort: 'high' });
+    expect(store.get('session:s1')).toMatchObject({ floor: 'deep', tier: 'deep' });
+    expect((await tiergear.recent(host, 1))[0]).toContain('manual → up deep (floor set)');
   });
 
   it('logs nothing new when off is picked again', async () => {
@@ -562,9 +574,9 @@ describe('band controls', () => {
     const { host } = fakeHost([{ tier: ['deep', 0.8] }]);
     await createTiergear({}).promptSubmit(host, typed('refactor the parser'));
     const reloaded = createTiergear({});
-    expect(await reloaded.controls(host)).toEqual({ tier: 'deep', paused: false });
+    expect(await reloaded.controls(host)).toMatchObject({ tier: 'deep', paused: false });
     await reloaded.pause(host);
-    expect(await reloaded.controls(host)).toEqual({ tier: 'deep', paused: true });
+    expect(await reloaded.controls(host)).toMatchObject({ tier: 'deep', paused: true });
   });
 });
 

@@ -24,6 +24,7 @@ describe('resolveConfig', () => {
       showModelEffort: true,
       showReason: true,
       instantSwitchConfidence: null,
+      showFloor: true,
     });
   });
 

@@ -134,6 +134,19 @@ function appliedForTier(record: SessionRecord, model: string | null, tier: Tier,
   return { model: target.model, effort: target.effort };
 }
 
+/** A floor set by hand: a tier under it rises to it; a launch ceiling still bounds it. */
+export function decideSetFloor(input: { record: SessionRecord; floor: Tier; sessionModel: string | null; config: Config; tables: Tables }): Decision {
+  const { record, config, tables } = input;
+  const floor = record.ceiling !== null && tierRank(input.floor) > tierRank(record.ceiling) ? record.ceiling : input.floor;
+  const floored: SessionRecord = { ...record, floor };
+  if (record.pinned || record.tier === null || tierRank(record.tier) >= tierRank(floor)) {
+    return { record: floored, change: 'hold', confidence: null, reason: 'floor set' };
+  }
+  const model = heldModel(record, input.sessionModel);
+  const applied = appliedForTier(record, model, floor, config, tables);
+  return { record: { ...floored, tier: floor, applied, model: applied.model ?? model, downStreak: 0 }, change: 'up', confidence: null, reason: 'floor set' };
+}
+
 export function decidePause(record: SessionRecord): Decision {
   return pausedHold(record, null);
 }
@@ -186,10 +199,11 @@ export function decideFirstTurn(input: {
   if (!answer || answer.confidence < config.minUpgradeConfidence) {
     return { record, change: 'hold', confidence: answer?.confidence ?? null, reason: answer ? 'low confidence' : 'no answer' };
   }
-  // The first turn has no cache to lose, so the model changes with the tier.
-  const target = firstTarget(tables, 'claude', answer.tier);
+  // The first turn has no cache to lose, so the model changes with the tier; a floor set by hand still holds.
+  const tier = maxTier(answer.tier, record.floor);
+  const target = firstTarget(tables, 'claude', tier);
   return {
-    record: { ...record, tier: answer.tier, floor: stepDown(answer.tier), model: target.model, applied: { model: target.model, effort: target.effort } },
+    record: { ...record, tier, floor: record.floor ?? stepDown(answer.tier), model: target.model, applied: { model: target.model, effort: target.effort } },
     change: 'set',
     confidence: answer.confidence,
     reason: 'first turn',
@@ -219,7 +233,7 @@ export function decideNextTurn(input: {
 
   if (record.tier === null) {
     if (!answer || answer.confidence < config.minUpgradeConfidence) return hold(answer ? 'low confidence' : 'no answer');
-    const decided = move(answer.tier, 'set', 'tier decided');
+    const decided = move(maxTier(answer.tier, record.floor), 'set', 'tier decided');
     return { ...decided, record: { ...decided.record, floor: record.floor ?? stepDown(answer.tier) } };
   }
 

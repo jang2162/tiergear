@@ -26,6 +26,8 @@ export interface Config {
   showReason: boolean;
   // A lower tier the judge is at least this sure of applies at once, without the downgrade streak; null: off.
   instantSwitchConfidence: number | null;
+  // The floor picker in the band.
+  showFloor: boolean;
 }
 
 // A hook has 10s; the judge gets at most 8s of it so the rest of the hook still fits.
@@ -72,6 +74,7 @@ export function resolveConfig(options: Readonly<Record<string, unknown>>): Confi
     showModelEffort: options['showModelEffort'] !== false,
     showReason: options['showReason'] !== false,
     instantSwitchConfidence: null,
+    showFloor: options['showFloor'] !== false,
   };
   for (const key of NUMBER_KEYS) {
     const value = options[key];

@@ -10,6 +10,7 @@ import {
   decideNextTurn,
   decidePause,
   decidePick,
+  decideSetFloor,
   inEffect,
   newRecord,
   noteJudgeOutcome,
@@ -29,7 +30,7 @@ import { appendLogLine, decisionLogPath, recentDecisionLines, type LogEntry } fr
 import { abridge, firstTurnState, nextTurnState, type ContextMessage } from '../src/core/state.js';
 import { statusPath, type StatusRecord } from '../src/core/status.js';
 import { DEFAULT_TABLES, parseTablesFile, tablesPath, type Tables } from '../src/core/tables.js';
-import { TIER_ORDER, claudeAlias, claudeModelId, isTier, type Tier } from '../src/core/tiers.js';
+import { TIER_ORDER, claudeAlias, claudeModelId, isTier, tierRank, type Tier } from '../src/core/tiers.js';
 
 interface SessionMessageLike {
   role: string;
@@ -142,10 +143,11 @@ interface SessionMemory {
   record: SessionRecord | null | undefined;
 }
 
-/** What the band's controls show: the tier, and whether routing is paused. */
+/** What the band's controls show: the tier, whether routing is paused, and the floor. */
 export interface Controls {
   tier: Tier | null;
   paused: boolean;
+  floor: Tier | null;
 }
 
 type LogDetail = Pick<LogEntry, 'phase' | 'outcome' | 'ms' | 'stuck' | 'proposed'>;
@@ -445,15 +447,18 @@ export function createTiergear(options: Readonly<Record<string, unknown>>) {
     pick: (host: HookHost, tier: Tier): Promise<void> =>
       control(host, 'tier pick', (record, mem, t) => decidePick({ record, tier, sessionModel: mem.sessionModel, config, tables: t })),
     /** Tier: off withdraws everything tiergear applies and stops the judge, until a tier is picked. */
+    /** The floor picked in the band: the tier never goes under it, and rises to it now if it is lower. */
+    setFloor: (host: HookHost, floor: Tier): Promise<void> =>
+      control(host, 'floor', (record, mem, t) => decideSetFloor({ record, floor, sessionModel: mem.sessionModel, config, tables: t })),
     pause: (host: HookHost): Promise<void> => control(host, 'pause', (record) => (record.pinned ? null : decidePause(record))),
     async controls(host: HookHost): Promise<Controls> {
       try {
         const session = await host.session.id();
         const mem = memory(session);
         if (mem.record === undefined) mem.record = parseRecord(await host.store.get(`session:${session}`));
-        return { tier: mem.record?.tier ?? null, paused: mem.record?.pinned ?? false };
+        return { tier: mem.record?.tier ?? null, paused: mem.record?.pinned ?? false, floor: mem.record?.floor ?? null };
       } catch {
-        return { tier: null, paused: false };
+        return { tier: null, paused: false, floor: null };
       }
     },
     toolResult(session: string, tool: string, isError: boolean, text: string | undefined): void {
@@ -542,36 +547,52 @@ export const register: Register = (on: On, options: PluginOptions) => {
     if (e.props.hasSurvey) return below;
     const session = await $.session.id().catch(() => null);
     if (session === null) return below;
-    const { showTierButtons, showRecentButton } = tiergear.config;
+    const { showTierButtons, showFloor, showRecentButton } = tiergear.config;
     const text = tiergear.bandText(session);
-    if (!text && !showTierButtons && !showRecentButton) return below;
-    const { Box, Text, Button } = $.ui.resolve(e);
+    if (!text && !showTierButtons && !showFloor && !showRecentButton) return below;
+    const table = $.ui.resolve(e);
+    const { Box, Text, Button } = table;
     const parts = text ? [Text({ dimColor: true, children: text })] : [];
+    const { tier, paused, floor } = await tiergear.controls(hostOf($));
+    // Fenced off from the line and from Recent: | Tier: off … max | Floor: quick |
+    const fenced = [];
     if (showTierButtons) {
-      const { tier, paused } = await tiergear.controls(hostOf($));
       const chosen = paused ? OFF : tier;
       // One plain button per choice, so a single click picks; the one in effect bracketed at full strength.
-      const buttons = [OFF, ...TIER_ORDER].map((value) =>
-        Button({
-          key: `tiergear-tier-${value}`,
-          label: value === chosen ? `[${value}]` : value,
-          plain: true,
-          dimColor: value !== chosen,
-          onPress: async () => {
-            if (value === OFF) await tiergear.pause(hostOf($));
-            else if (isTier(value)) await tiergear.pick(hostOf($), value);
+      // A tier under the floor can't be picked, so it is struck through and not a button.
+      const choices = [OFF, ...TIER_ORDER].map((value) =>
+        value !== OFF && value !== chosen && floor !== null && isTier(value) && tierRank(value) < tierRank(floor)
+          ? Text({ dimColor: true, strikethrough: true, children: value })
+          : Button({
+              key: `tiergear-tier-${value}`,
+              label: value === chosen ? `[${value}]` : value,
+              plain: true,
+              dimColor: value !== chosen,
+              onPress: async () => {
+                if (value === OFF) await tiergear.pause(hostOf($));
+                else if (isTier(value)) await tiergear.pick(hostOf($), value);
+              },
+            }),
+      );
+      fenced.push(Box({ flexDirection: 'row', gap: 1, children: [Text({ dimColor: true, children: 'Tier:' }), Box({ flexDirection: 'row', gap: 2, children: choices })] }));
+    }
+    // The mobile app draws no picker (and no band); the guard keeps the table's type honest.
+    if (showFloor && 'Select' in table) {
+      fenced.push(
+        table.Select({
+          key: 'tiergear-floor',
+          label: 'Floor:',
+          options: TIER_ORDER.map((value) => ({ value })),
+          ...(floor !== null ? { value: floor } : {}),
+          onSelect: async (value) => {
+            if (isTier(value)) await tiergear.setFloor(hostOf($), value);
           },
         }),
       );
-      // Fenced off from the line and from Recent: | Tier: off … max |
-      const bar = Text({ dimColor: true, children: '|' });
-      parts.push(
-        Box({
-          flexDirection: 'row',
-          gap: 1,
-          children: [bar, Text({ dimColor: true, children: 'Tier:' }), Box({ flexDirection: 'row', gap: 2, children: buttons }), bar],
-        }),
-      );
+    }
+    if (fenced.length > 0) {
+      const bar = () => Text({ dimColor: true, children: '|' });
+      parts.push(Box({ flexDirection: 'row', gap: 1, children: [bar(), ...fenced.flatMap((group, i) => (i === 0 ? [group] : [bar(), group])), bar()] }));
     }
     if (showRecentButton) {
       parts.push(

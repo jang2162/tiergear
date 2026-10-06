@@ -25,6 +25,7 @@
     "showConfidence": { "type": "boolean", "title": "Show confidence", "description": "Show the judge's confidence in the line above the prompt.", "default": true },
     "showModelEffort": { "type": "boolean", "title": "Show model/effort", "description": "Show the model and effort in effect in the line above the prompt.", "default": true },
     "showReason": { "type": "boolean", "title": "Show reason", "description": "Show why nothing changed, as 'unchanged (same tier)', in the line above the prompt.", "default": true },
+    "showFloor": { "type": "boolean", "title": "Show floor", "description": "Show the floor picker above the prompt; tiers under the floor are struck through and can't be picked.", "default": true },
     "showTierButtons": { "type": "boolean", "title": "Show tier buttons", "description": "Show the off and tier buttons above the prompt.", "default": true }
   }
 }
