@@ -46,7 +46,7 @@ export function isStatusField(value: unknown): value is StatusField {
 
 // One value for a widget of its own; empty when not known, so the widget hides.
 export function statusField(status: StatusRecord, field: StatusField): string {
-  if (field === 'state') return status.paused ? 'paused' : 'auto';
+  if (field === 'state') return status.paused ? 'manual' : 'auto';
   const value = status[field];
   return value === null ? '' : String(value);
 }
@@ -57,7 +57,7 @@ function modelName(model: string): string {
   return match ? `${match[1]![0]!.toUpperCase()}${match[1]!.slice(1)} ${match[2]}.${match[3]}` : model;
 }
 
-// Placeholders: {tier} {model} {modelName} (as Claude Code names it) {effort} {state} (auto or paused) {line} (the band's text).
+// Placeholders: {tier} {model} {modelName} (as Claude Code names it) {effort} {state} (auto or manual) {line} (the band's text).
 export function formatStatus(status: StatusRecord, template?: string): string {
   if (template !== undefined) {
     const values: Record<string, string> = {
@@ -65,7 +65,7 @@ export function formatStatus(status: StatusRecord, template?: string): string {
       model: status.model ?? '-',
       modelName: status.model === null ? '-' : modelName(status.model),
       effort: status.effort === null ? '-' : String(status.effort),
-      state: status.paused ? 'paused' : 'auto',
+      state: status.paused ? 'manual' : 'auto',
       line: status.line,
     };
     const known: Record<string, boolean> = { tier: status.tier !== null, model: status.model !== null, modelName: status.model !== null, effort: status.effort !== null, state: true, line: true };
@@ -76,5 +76,5 @@ export function formatStatus(status: StatusRecord, template?: string): string {
   }
   const effort = status.effort === null ? null : String(status.effort);
   const ran = status.model ? `${status.model}/${effort ?? '-'}` : effort;
-  return [status.paused ? 'paused' : status.tier, ran].filter((part) => part !== null).join(' · ');
+  return [status.paused ? 'manual' : status.tier, ran].filter((part) => part !== null).join(' · ');
 }

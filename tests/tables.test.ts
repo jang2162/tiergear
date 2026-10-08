@@ -4,11 +4,10 @@ import { DEFAULT_TABLES, effortFor, firstTarget, mergeTables, parseTablesFile, t
 describe('table A and B', () => {
   it('gives the first-turn model and effort from the spec', () => {
     const t = (tier: Parameters<typeof firstTarget>[2]) => firstTarget(DEFAULT_TABLES, 'claude', tier);
-    // Not haiku: auto mode does not run there, so every command would wait for approval.
-    expect(t('trivial')).toEqual({ model: 'sonnet', effort: 'low' });
+    expect(t('trivial')).toEqual({ model: 'haiku', effort: 'low' });
     expect(t('quick')).toEqual({ model: 'sonnet', effort: 'low' });
     expect(t('standard')).toEqual({ model: 'sonnet', effort: 'medium' });
-    expect(t('deep')).toEqual({ model: 'opus', effort: 'xhigh' });
+    expect(t('deep')).toEqual({ model: 'opus', effort: 'high' });
     expect(t('max')).toEqual({ model: 'fable', effort: 'xhigh' });
   });
 
@@ -30,12 +29,12 @@ describe('overrides', () => {
     expect(merged?.claude.models.max).toBe('opus');
     expect(merged?.claude.effort['opus']?.deep).toBe('max');
     expect(merged?.claude.effort['opus']?.standard).toBe('medium');
-    expect(DEFAULT_TABLES.claude.effort['opus']?.deep).toBe('xhigh');
+    expect(DEFAULT_TABLES.claude.effort['opus']?.deep).toBe('high');
   });
 
-  it('restores haiku for trivial from a one-cell override, with no effort', () => {
-    const merged = mergeTables(DEFAULT_TABLES, { claude: { models: { trivial: 'haiku' } } });
-    expect(merged && firstTarget(merged, 'claude', 'trivial')).toEqual({ model: 'haiku', effort: null });
+  it('moves trivial back to sonnet from a one-cell override', () => {
+    const merged = mergeTables(DEFAULT_TABLES, { claude: { models: { trivial: 'sonnet' } } });
+    expect(merged && firstTarget(merged, 'claude', 'trivial')).toEqual({ model: 'sonnet', effort: 'low' });
   });
 
   it('adds a new model column with unset cells as null', () => {

@@ -64,7 +64,7 @@ describe('files', () => {
     const tiergear = createTiergear({});
     await tiergear.promptSubmit(host, { text: 'go', origin: { kind: 'composer' } });
     expect(judgeCalls).toBe(0);
-    expect(tiergear.applied('e2e')).toEqual({ model: 'opus', effort: 'xhigh' });
+    expect(tiergear.applied('e2e')).toEqual({ model: 'opus', effort: 'high' });
   });
 
   it('appends decisions and reads them across files', async () => {

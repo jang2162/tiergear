@@ -42,16 +42,16 @@ describe('decideFirstTurn', () => {
   it('applies table A and B for the confident tier and puts the floor one step below', () => {
     const d = first(verdict('deep', 0.8));
     expect(d.change).toBe('set');
-    expect(d.record).toMatchObject({ tier: 'deep', floor: 'standard', model: 'opus', applied: { model: 'opus', effort: 'xhigh' } });
+    expect(d.record).toMatchObject({ tier: 'deep', floor: 'standard', model: 'opus', applied: { model: 'opus', effort: 'high' } });
   });
 
-  it('starts trivial on sonnet at low effort', () => {
-    expect(first(verdict('trivial', 0.9)).record.applied).toEqual({ model: 'sonnet', effort: 'low' });
+  it('starts trivial on haiku at low effort', () => {
+    expect(first(verdict('trivial', 0.9)).record.applied).toEqual({ model: 'haiku', effort: 'low' });
   });
 
-  it('sends no effort when trivial is set back to haiku', () => {
-    const haikuTables = mergeTables(tables, { claude: { models: { trivial: 'haiku' } } })!;
-    expect(first(verdict('trivial', 0.9), { tables: haikuTables }).record.applied).toEqual({ model: 'haiku', effort: null });
+  it('sends no effort when the haiku column has none', () => {
+    const noEffort = mergeTables(tables, { claude: { effort: { haiku: { trivial: null } } } })!;
+    expect(first(verdict('trivial', 0.9), { tables: noEffort }).record.applied).toEqual({ model: 'haiku', effort: null });
   });
 
   it('keeps the session as it is on low confidence or no answer', () => {
@@ -98,7 +98,7 @@ describe('decideNextTurn', () => {
 
   it('switches the model too when switchModelMidSession is on', () => {
     const d = next(at('quick'), verdict('deep', 0.6), 0, { ...config, switchModelMidSession: true });
-    expect(d.record.applied).toEqual({ model: 'opus', effort: 'xhigh' });
+    expect(d.record.applied).toEqual({ model: 'opus', effort: 'high' });
     expect(d.record.model).toBe('opus');
   });
 
@@ -168,7 +168,7 @@ describe('decideNextTurn', () => {
 
   it('falls back to effort only when the session model is unknown', () => {
     const d = next(newRecord('t', now), verdict('deep', 0.7));
-    expect(d.record).toMatchObject({ tier: 'deep', floor: 'standard', applied: { effort: 'xhigh' } });
+    expect(d.record).toMatchObject({ tier: 'deep', floor: 'standard', applied: { effort: 'high' } });
     expect(d.record.applied?.model).toBeUndefined();
   });
 
@@ -176,9 +176,9 @@ describe('decideNextTurn', () => {
     const haiku = at('trivial', { model: 'haiku', applied: { model: 'haiku', effort: null } });
     const up = next(haiku, verdict('deep', 0.8));
     expect(up.change).toBe('up');
-    expect(up.record.applied).toEqual({ model: 'opus', effort: 'xhigh' });
+    expect(up.record.applied).toEqual({ model: 'opus', effort: 'high' });
     expect(up.record.model).toBe('opus');
-    expect(next(haiku, null, 3).record.applied).toEqual({ model: 'sonnet', effort: 'low' });
+    expect(next(haiku, null, 3).record.applied).toEqual({ model: 'haiku', effort: 'medium' });
   });
 
   it('explains holds', () => {
@@ -189,8 +189,29 @@ describe('decideNextTurn', () => {
   it('holds a pinned session and clears applied, so its own model and effort rule', () => {
     const d = next(at('quick', { pinned: true }), verdict('max'), 5);
     expect(d.change).toBe('hold');
-    expect(d.reason).toBe('paused');
+    expect(d.reason).toBe('manual');
     expect(d.record.applied).toBeNull();
+  });
+});
+
+describe('trivial with the model held', () => {
+  const switching = { ...config, switchModelMidSession: true };
+
+  it('stops lowering at quick, since trivial would only repeat its effort', () => {
+    const d = next(at('quick', { floor: 'trivial' }), verdict('trivial', 0.95), 0, { ...config, instantSwitchConfidence: 0.9 });
+    expect(d.change).toBe('hold');
+    expect(d.record.tier).toBe('quick');
+  });
+
+  it('lowers to trivial when the model switches mid-session', () => {
+    const d = next(at('quick', { floor: 'trivial' }), verdict('trivial', 0.95), 0, { ...switching, instantSwitchConfidence: 0.9 });
+    expect(d.record).toMatchObject({ tier: 'trivial', applied: { model: 'haiku', effort: 'low' } });
+  });
+
+  it('turns a trivial pick into quick, but not before the first prompt', () => {
+    expect(decidePick({ record: at('deep'), tier: 'trivial', sessionModel: null, config, tables }).record.tier).toBe('quick');
+    const unprompted = { ...newRecord('', now), started: false };
+    expect(decidePick({ record: unprompted, tier: 'trivial', sessionModel: null, config, tables }).record.tier).toBe('trivial');
   });
 });
 
@@ -202,13 +223,13 @@ describe('manual controls', () => {
   const unprompted = (extra: Partial<SessionRecord> = {}): SessionRecord => ({ ...newRecord('', now), started: false, ...extra });
 
   it('starts from a picked tier mid-session, holding the model and taking its effort', () => {
-    const d = pick(at('deep', { floor: 'standard', model: 'opus', applied: { model: 'opus', effort: 'xhigh' } }), 'quick');
+    const d = pick(at('deep', { floor: 'standard', model: 'opus', applied: { model: 'opus', effort: 'high' } }), 'quick');
     expect(d).toMatchObject({ change: 'set', reason: 'manual tier', confidence: null });
     expect(d.record).toMatchObject({ tier: 'quick', model: 'opus', applied: { model: 'opus', effort: 'low' }, pinned: false, downStreak: 0 });
   });
 
   it('lowers the floor to a pick below it and keeps it otherwise', () => {
-    expect(pick(at('deep', { floor: 'standard' }), 'trivial').record.floor).toBe('trivial');
+    expect(pick(at('deep', { floor: 'standard' }), 'quick').record.floor).toBe('quick');
     expect(pick(at('deep', { floor: 'standard' }), 'max').record.floor).toBe('standard');
     expect(pick(at('deep', { floor: null }), 'deep').record.floor).toBe('standard');
   });
@@ -223,25 +244,25 @@ describe('manual controls', () => {
   });
 
   it('switches the model too when switchModelMidSession is on', () => {
-    expect(pick(at('quick'), 'deep', null, { ...config, switchModelMidSession: true }).record.applied).toEqual({ model: 'opus', effort: 'xhigh' });
+    expect(pick(at('quick'), 'deep', null, { ...config, switchModelMidSession: true }).record.applied).toEqual({ model: 'opus', effort: 'high' });
   });
 
   it("unpauses on a pick and holds the session's own model, not the one it was held on before", () => {
     const paused = at('deep', { pinned: true, applied: null, model: 'sonnet' });
     const d = pick(paused, 'deep', 'opus');
-    expect(d.record).toMatchObject({ pinned: false, model: 'opus', applied: { model: 'opus', effort: 'xhigh' } });
+    expect(d.record).toMatchObject({ pinned: false, model: 'opus', applied: { model: 'opus', effort: 'high' } });
   });
 
   it('starts a pick made before the first prompt on table A, as the first turn would', () => {
     const d = pick(unprompted(), 'deep');
-    expect(d.record).toMatchObject({ tier: 'deep', floor: 'standard', model: 'opus', applied: { model: 'opus', effort: 'xhigh' }, started: false });
+    expect(d.record).toMatchObject({ tier: 'deep', floor: 'standard', model: 'opus', applied: { model: 'opus', effort: 'high' }, started: false });
   });
 
   it('keeps a pick made before the first prompt for that turn, without the judge', () => {
     const picked = pick(unprompted(), 'deep').record;
     const d = firstTurn(verdict('trivial', 0.99), { record: picked });
     expect(d).toMatchObject({ change: 'hold', reason: 'manual tier', confidence: null });
-    expect(d.record).toMatchObject({ tier: 'deep', applied: { model: 'opus', effort: 'xhigh' } });
+    expect(d.record).toMatchObject({ tier: 'deep', applied: { model: 'opus', effort: 'high' } });
   });
 
   it('keeps the launch bounds under a pick made before the first prompt', () => {
@@ -252,7 +273,7 @@ describe('manual controls', () => {
 
   it('pauses: nothing applied, the session on its own model and effort', () => {
     const d = decidePause(at('deep', { downStreak: 1 }));
-    expect(d).toMatchObject({ change: 'hold', reason: 'paused', confidence: null });
+    expect(d).toMatchObject({ change: 'hold', reason: 'manual', confidence: null });
     expect(d.record).toMatchObject({ pinned: true, applied: null, downStreak: 0, tier: 'deep' });
   });
 });
@@ -331,27 +352,27 @@ describe('records and status', () => {
     expect(statusText(next(at('quick'), verdict('quick', 0.62)))).toBe('tiergear · quick 0.62 · unchanged (same tier)');
     const haikuTables = mergeTables(tables, { claude: { models: { trivial: 'haiku' } } })!;
     const haiku = decideFirstTurn({ record: newRecord('t', now), floor: null, verdict: verdict('trivial', 0.9), config, tables: haikuTables });
-    expect(statusText(haiku)).toBe('tiergear · trivial 0.90 → haiku/-');
+    expect(statusText(haiku)).toBe('tiergear · trivial 0.90 → haiku/low');
   });
 
   it('builds the line from the parts asked for', () => {
     const all = { tier: true, confidence: true, modelEffort: true, reason: true };
     const up = next(at('quick'), verdict('deep', 0.91));
     const held = next(at('quick'), verdict('quick', 0.62));
-    const current = { model: 'opus', effort: 'xhigh' };
-    expect(statusParts(up, current, all)).toBe('deep 0.91 → opus/xhigh');
-    expect(statusParts(held, current, all)).toBe('quick 0.62 · opus/xhigh · unchanged (same tier)');
-    expect(statusParts(up, current, { ...all, confidence: false })).toBe('deep → opus/xhigh');
-    expect(statusParts(up, current, { ...all, tier: false, confidence: false })).toBe('→ opus/xhigh');
+    const current = { model: 'opus', effort: 'high' };
+    expect(statusParts(up, current, all)).toBe('deep 0.91 → opus/high');
+    expect(statusParts(held, current, all)).toBe('quick 0.62 · opus/high · unchanged (same tier)');
+    expect(statusParts(up, current, { ...all, confidence: false })).toBe('deep → opus/high');
+    expect(statusParts(up, current, { ...all, tier: false, confidence: false })).toBe('→ opus/high');
     expect(statusParts(held, current, { ...all, modelEffort: false })).toBe('quick 0.62 · unchanged (same tier)');
     expect(statusParts(held, current, { tier: false, confidence: true, modelEffort: false, reason: true })).toBe('0.62 · unchanged (same tier)');
-    expect(statusParts(held, current, { ...all, reason: false })).toBe('quick 0.62 · opus/xhigh');
+    expect(statusParts(held, current, { ...all, reason: false })).toBe('quick 0.62 · opus/high');
     expect(statusParts(up, current, { tier: false, confidence: false, modelEffort: false, reason: true })).toBe('');
   });
 
   it('shows the model and effort in effect, on holds too', () => {
-    const current = { model: 'opus', effort: 'xhigh' };
-    expect(statusText(next(at('quick'), verdict('quick', 0.62)), current)).toBe('tiergear · quick 0.62 · opus/xhigh · unchanged (same tier)');
+    const current = { model: 'opus', effort: 'high' };
+    expect(statusText(next(at('quick'), verdict('quick', 0.62)), current)).toBe('tiergear · quick 0.62 · opus/high · unchanged (same tier)');
     expect(statusText(next(at('quick'), verdict('deep', 0.91)), { model: 'sonnet', effort: 'high' })).toBe('tiergear · deep 0.91 → sonnet/high');
     expect(statusText(next(at('standard'), null), { model: 'haiku', effort: null })).toBe('tiergear · standard n/d · haiku/- · unchanged (no answer)');
   });

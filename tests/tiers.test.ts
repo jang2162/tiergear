@@ -36,14 +36,14 @@ describe('tiers', () => {
     expect(claudeModelId('claude-sonnet-5-5')).toBe('claude-sonnet-5-5');
     expect(claudeAlias('claude-opus-5-5')).toBe('opus');
     expect(claudeAlias('mystery')).toBe('mystery');
-    expect(claudeAlias('claude-haiku-4-5-20251001')).toBe('haiku');
+    expect(claudeAlias('claude-haiku-5-5-20251001')).toBe('haiku');
     expect(claudeAlias('claude-opus-5-5[1m]')).toBe('opus');
     expect(claudeAlias('claude-sonnet-5-50')).toBe('claude-sonnet-5-50');
     expect(claudeAlias('sonnet')).toBe('sonnet');
   });
 
   it('builds launch commands and leaves out a null effort', () => {
-    expect(launchCommand('claude', { model: 'opus', effort: 'xhigh' })).toBe('claude --model opus --effort xhigh');
+    expect(launchCommand('claude', { model: 'opus', effort: 'high' })).toBe('claude --model opus --effort high');
     expect(launchCommand('claude', { model: 'haiku', effort: null })).toBe('claude --model haiku');
     // A shell would glob the brackets, so such an id is quoted.
     expect(launchCommand('claude', { model: 'opus[1m]', effort: 'high' })).toBe("claude --model 'opus[1m]' --effort high");

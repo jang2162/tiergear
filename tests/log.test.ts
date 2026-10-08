@@ -21,15 +21,15 @@ describe('recentDecisionLines', () => {
   const entry = (over: Record<string, unknown>) =>
     JSON.stringify({
       at: 1, source: 'hook', session: 's', phase: 'next', judge: 'jev', tier: 'deep', change: 'hold', confidence: 0.44, stuck: 0.1,
-      outcome: 'ok', ms: 200, applied: { model: 'opus', effort: 'xhigh' }, reason: 'low confidence', proposed: 'quick', ...over,
+      outcome: 'ok', ms: 200, applied: { model: 'opus', effort: 'high' }, reason: 'low confidence', proposed: 'quick', ...over,
     });
   const time = (at: number) => `t${at}`;
 
   it('shows what the judge proposed next to what tiergear did, newest first', () => {
     const text = [entry({ at: 1 }), entry({ at: 2, proposed: 'deep', confidence: 0.52, change: 'up', reason: 'harder step' })].join('\n');
     expect(recentDecisionLines(text, 10, time)).toEqual([
-      't2  judge deep 0.52 → up deep (harder step) · opus/xhigh',
-      't1  judge quick 0.44 → hold deep (low confidence) · opus/xhigh',
+      't2  judge deep 0.52 → up deep (harder step) · opus/high',
+      't1  judge quick 0.44 → hold deep (low confidence) · opus/high',
     ]);
   });
 
@@ -44,7 +44,7 @@ describe('recentDecisionLines', () => {
       entry({ at: 2, outcome: 'skipped', proposed: null, confidence: null, change: 'set', reason: 'launched at deep' }),
     ].join('\n');
     expect(recentDecisionLines(text, 10, time)).toEqual([
-      't2  judge skipped → set deep (launched at deep) · opus/xhigh',
+      't2  judge skipped → set deep (launched at deep) · opus/high',
       't1  judge timeout → hold unset (no answer) · session',
     ]);
   });

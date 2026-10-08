@@ -1,6 +1,6 @@
 {
   "name": "tiergear",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "A decision model picks the model and reasoning effort for each session and adjusts effort as the work changes.",
   "author": { "name": "jang2162" },
   "license": "MIT",
@@ -9,7 +9,7 @@
     "judgeBaseUrl": { "type": "string", "title": "Judge base URL", "description": "Leave unset for the preset's address. Must be https, or http to localhost." },
     "judgeModel": { "type": "string", "title": "Judge model", "description": "Leave unset for the preset's model." },
     "judgeApiKey": { "type": "string", "title": "Judge API key", "description": "Leave unset to use the preset's environment variable (TYPESAFE_API_KEY, OLLAYA_API_KEY, KEV_API_KEY), which is sent only to the preset's own address.", "sensitive": true },
-    "switchModelMidSession": { "type": "boolean", "title": "Switch model mid-session", "description": "After the first turn, also change the model (breaks the prompt cache). Off: only effort changes.", "default": false },
+    "switchModelMidSession": { "type": "boolean", "title": "Switch model mid-session", "description": "After the first turn, also change the model (loses the whole prompt cache; an effort change usually keeps it). Off: only effort changes.", "default": false },
     "instantSwitchConfidence": { "type": "number", "title": "Confidence · instant switch", "description": "A lower tier the judge is at least this sure of applies at once, skipping 'Turns to lower'. Leave unset (or 0) to turn it off." },
     "minDowngradeConfidence": { "type": "number", "title": "Confidence · lower", "description": "Minimum judge confidence for a turn to count toward lowering the tier.", "default": 0.85 },
     "minUpgradeConfidence": { "type": "number", "title": "Confidence · raise", "description": "Minimum judge confidence to raise the tier.", "default": 0.5 },
@@ -26,6 +26,6 @@
     "showModelEffort": { "type": "boolean", "title": "Show model/effort", "description": "Show the model and effort in effect in the line above the prompt.", "default": true },
     "showReason": { "type": "boolean", "title": "Show reason", "description": "Show why nothing changed, as 'unchanged (same tier)', in the line above the prompt.", "default": true },
     "showFloor": { "type": "boolean", "title": "Show floor", "description": "Show the floor picker above the prompt; tiers under the floor are struck through and can't be picked.", "default": true },
-    "showTierButtons": { "type": "boolean", "title": "Show tier buttons", "description": "Show the off and tier buttons above the prompt.", "default": true }
+    "showTierButtons": { "type": "boolean", "title": "Show tier buttons", "description": "Show the manual and tier buttons above the prompt.", "default": true }
   }
 }

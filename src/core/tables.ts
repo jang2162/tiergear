@@ -17,13 +17,12 @@ function column(trivial: Effort | null, quick: Effort | null, standard: Effort |
 
 export const DEFAULT_TABLES: Tables = {
   claude: {
-    // Not haiku for trivial: auto mode does not run on it, so every command waits for approval.
-    // The haiku column stays so a bypass-permissions user can restore it with one models cell.
-    models: { trivial: 'sonnet', quick: 'sonnet', standard: 'sonnet', deep: 'opus', max: 'fable' },
+    // Haiku for trivial. Auto mode does not run on haiku, so commands wait for approval there.
+    models: { trivial: 'haiku', quick: 'sonnet', standard: 'sonnet', deep: 'opus', max: 'fable' },
     effort: {
-      haiku: column(null, null, null, null, null),
+      haiku: column('low', 'medium', 'high', null, null),
       sonnet: column('low', 'low', 'medium', 'high', 'max'),
-      opus: column('low', 'low', 'medium', 'xhigh', 'max'),
+      opus: column('low', 'low', 'medium', 'high', 'max'),
       fable: column('low', 'low', 'medium', 'high', 'xhigh'),
     },
   },

@@ -7,11 +7,13 @@ import {
   RECORD_TTL_MS,
   canAskJudge,
   decideFirstTurn,
+  decideManualChange,
   decideNextTurn,
   decidePause,
   decidePick,
   decideSetFloor,
   inEffect,
+  lowestTier,
   newRecord,
   noteJudgeOutcome,
   parseRecord,
@@ -30,7 +32,7 @@ import { appendLogLine, decisionLogPath, recentDecisionLines, type LogEntry } fr
 import { abridge, firstTurnState, nextTurnState, type ContextMessage } from '../src/core/state.js';
 import { statusPath, type StatusRecord } from '../src/core/status.js';
 import { DEFAULT_TABLES, parseTablesFile, tablesPath, type Tables } from '../src/core/tables.js';
-import { TIER_ORDER, claudeAlias, claudeModelId, isTier, tierRank, type Tier } from '../src/core/tiers.js';
+import { TIER_ORDER, claudeAlias, claudeModelId, isTier, maxTier, tierRank, type Tier } from '../src/core/tiers.js';
 
 interface SessionMessageLike {
   role: string;
@@ -154,11 +156,12 @@ interface SessionMemory {
   record: SessionRecord | null | undefined;
 }
 
-/** What the band's controls show: the tier, whether routing is paused, and the floor. */
+/** What the band's controls show: the tier, whether routing is paused, the floor, and the lowest tier a pick can reach. */
 export interface Controls {
   tier: Tier | null;
   paused: boolean;
   floor: Tier | null;
+  lowest: Tier;
 }
 
 type LogDetail = Pick<LogEntry, 'phase' | 'outcome' | 'ms' | 'stuck' | 'proposed'>;
@@ -394,17 +397,16 @@ export function createTiergear(options: Readonly<Record<string, unknown>>) {
     return prompt;
   }
 
-  // A change of the engine-reported model or effort between turns is the user's (/model, /effort): routing stops.
-  async function pauseForManualChange(host: HookHost, session: string, mem: SessionMemory): Promise<void> {
+  // A change of the engine-reported model or effort between turns is the user's (/model, /effort): it stands until the tier moves.
+  async function keepManualChange(host: HookHost, session: string, mem: SessionMemory, model: string): Promise<void> {
     mem.applied = null;
     try {
       const now = await host.clock.now();
       const record = parseRecord(await host.store.get(`session:${session}`)) ?? newRecord('', now);
       if (record.pinned) return;
-      host.ui.log('[tiergear] manual model/effort change — routing paused for this session');
-      await commit(host, session, mem, decidePause(record), now, MANUAL);
+      await commit(host, session, mem, decideManualChange(record, model), now, MANUAL);
     } catch (error) {
-      host.ui.log(`[tiergear] pause not saved: ${errorText(error)}`);
+      host.ui.log(`[tiergear] manual change not saved: ${errorText(error)}`);
     }
   }
 
@@ -425,7 +427,7 @@ export function createTiergear(options: Readonly<Record<string, unknown>>) {
     const seen = mem.engine;
     if (seen === null || seen.turnId !== e.turnId) {
       mem.engine = { turnId: e.turnId, model, effort };
-      if (seen !== null && (seen.model !== model || seen.effort !== effort)) await pauseForManualChange(host, session, mem);
+      if (seen !== null && (seen.model !== model || seen.effort !== effort)) await keepManualChange(host, session, mem, model);
       if (mem.shown) {
         await show(host, session, mem);
         host.ui.refresh();
@@ -457,7 +459,7 @@ export function createTiergear(options: Readonly<Record<string, unknown>>) {
     /** A tier picked in the band: applied from the next main-loop request, then moved by the judge as usual. */
     pick: (host: HookHost, tier: Tier): Promise<void> =>
       control(host, 'tier pick', (record, mem, t) => decidePick({ record, tier, sessionModel: mem.sessionModel, config, tables: t })),
-    /** Tier: off withdraws everything tiergear applies and stops the judge, until a tier is picked. */
+    /** Tier: manual withdraws everything tiergear applies and stops the judge, until a tier is picked. */
     /** The floor picked in the band: the tier never goes under it, and rises to it now if it is lower. */
     setFloor: (host: HookHost, floor: Tier): Promise<void> =>
       control(host, 'floor', (record, mem, t) => decideSetFloor({ record, floor, sessionModel: mem.sessionModel, config, tables: t })),
@@ -467,9 +469,10 @@ export function createTiergear(options: Readonly<Record<string, unknown>>) {
         const session = await host.session.id();
         const mem = memory(session);
         if (mem.record === undefined) mem.record = parseRecord(await host.store.get(`session:${session}`));
-        return { tier: mem.record?.tier ?? null, paused: mem.record?.pinned ?? false, floor: mem.record?.floor ?? null };
+        const record = mem.record ?? null;
+        return { tier: record?.tier ?? null, paused: record?.pinned ?? false, floor: record?.floor ?? null, lowest: record ? lowestTier(record, config) : 'trivial' };
       } catch {
-        return { tier: null, paused: false, floor: null };
+        return { tier: null, paused: false, floor: null, lowest: 'trivial' };
       }
     },
     toolResult(session: string, tool: string, isError: boolean, text: string | undefined): void {
@@ -536,7 +539,7 @@ function hostOf($: EngineInterface): HookHost {
 }
 
 const RECENT_PANE = 'tiergear-recent';
-const OFF = 'off';
+const OFF = 'manual';
 const RECENT_TITLE = 'tiergear: recent decisions';
 const RECENT_MAX = 50;
 
@@ -565,15 +568,16 @@ export const register: Register = (on: On, options: PluginOptions) => {
     const table = $.ui.resolve(e);
     const { Box, Text, Button } = table;
     const parts = text ? [Text({ dimColor: true, children: text })] : [];
-    const { tier, paused, floor } = await tiergear.controls(hostOf($));
-    // Fenced off from the line and from Recent: | Tier: off … max | Floor: quick |
+    const { tier, paused, floor, lowest } = await tiergear.controls(hostOf($));
+    const bottom = maxTier(lowest, floor);
+    // Fenced off from the line and from Recent: | Tier: manual … max | Floor: quick |
     const fenced = [];
     if (showTierButtons) {
       const chosen = paused ? OFF : tier;
       // One plain button per choice, so a single click picks; the one in effect bracketed at full strength.
-      // A tier under the floor can't be picked, so it is struck through and not a button.
+      // A tier under the floor, or trivial once the model is held, can't be picked, so it is struck through and not a button.
       const choices = [OFF, ...TIER_ORDER].map((value) =>
-        value !== OFF && value !== chosen && floor !== null && isTier(value) && tierRank(value) < tierRank(floor)
+        value !== OFF && value !== chosen && isTier(value) && tierRank(value) < tierRank(bottom)
           ? Text({ dimColor: true, strikethrough: true, children: value })
           : Button({
               key: `tiergear-tier-${value}`,

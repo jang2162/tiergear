@@ -117,9 +117,14 @@ function appliedFor(model: string | null, tier: Tier, config: Config, tables: Ta
   return model ? { model, effort } : { effort };
 }
 
+/** The lowest tier a session can move to: with the model held, trivial only lowers the effort quick already has, so it is left out. */
+export function lowestTier(record: SessionRecord, config: Config): Tier {
+  return record.started && !config.switchModelMidSession ? 'quick' : 'trivial';
+}
+
 // A paused session runs on its own model and effort: nothing is applied.
 function pausedHold(record: SessionRecord, confidence: number | null): Decision {
-  return { record: { ...record, pinned: true, applied: null, downStreak: 0 }, change: 'hold', confidence, reason: 'paused' };
+  return { record: { ...record, pinned: true, applied: null, downStreak: 0 }, change: 'hold', confidence, reason: 'manual' };
 }
 
 // Paused, tiergear's held model is not in effect: the session's own is.
@@ -151,9 +156,15 @@ export function decidePause(record: SessionRecord): Decision {
   return pausedHold(record, null);
 }
 
+/** A model or effort set by hand (/model, /effort): it stands, and the judge carries on from it, so the next tier move works from the new model. */
+export function decideManualChange(record: SessionRecord, model: string): Decision {
+  return { record: { ...record, model, applied: null, downStreak: 0 }, change: 'hold', confidence: null, reason: 'manual change' };
+}
+
 /** A tier picked by hand: a starting point the judge keeps moving by the usual rules. */
 export function decidePick(input: { record: SessionRecord; tier: Tier; sessionModel: string | null; config: Config; tables: Tables }): Decision {
-  const { record, tier, config, tables } = input;
+  const { record, config, tables } = input;
+  const tier = maxTier(input.tier, lowestTier(record, config));
   const model = heldModel(record, input.sessionModel);
   const applied = appliedForTier(record, model, tier, config, tables);
   const floor = record.floor === null ? stepDown(tier) : tierRank(tier) < tierRank(record.floor) ? tier : record.floor;
@@ -229,11 +240,13 @@ export function decideNextTurn(input: {
     return { record: { ...record, tier, applied, model: applied.model ?? model, downStreak: 0 }, change, confidence, reason };
   };
 
+  const bottom = maxTier(lowestTier(record, config), record.floor);
+
   if (record.pinned) return pausedHold(record, confidence);
 
   if (record.tier === null) {
     if (!answer || answer.confidence < config.minUpgradeConfidence) return hold(answer ? 'low confidence' : 'no answer');
-    const decided = move(maxTier(answer.tier, record.floor), 'set', 'tier decided');
+    const decided = move(maxTier(answer.tier, bottom), 'set', 'tier decided');
     return { ...decided, record: { ...decided.record, floor: record.floor ?? stepDown(answer.tier) } };
   }
 
@@ -251,7 +264,7 @@ export function decideNextTurn(input: {
 
   // A judge sure enough for the instant switch lowers at once, straight to its tier, never under the floor.
   if (answer && tierRank(answer.tier) < tierRank(current) && config.instantSwitchConfidence !== null && answer.confidence >= config.instantSwitchConfidence) {
-    const lower = maxTier(answer.tier, record.floor);
+    const lower = maxTier(answer.tier, bottom);
     return lower === current ? hold('at floor') : move(lower, 'down', 'instant switch');
   }
 
@@ -259,7 +272,7 @@ export function decideNextTurn(input: {
   if (answer && tierRank(answer.tier) < tierRank(current) && answer.confidence >= config.minDowngradeConfidence) {
     const streak = record.downStreak + 1;
     if (streak < config.downgradeStreak) return hold(`easier step ${streak}/${config.downgradeStreak}`, streak);
-    const lower = maxTier(stepDown(current), record.floor);
+    const lower = maxTier(stepDown(current), bottom);
     return lower === current ? hold('at floor') : move(lower, 'down', 'easier steps');
   }
 

@@ -8,13 +8,13 @@ export type Harness = 'claude' | 'codex';
 
 export interface Target {
   model: string;
-  // null: send no effort (Haiku 4.5 has none).
+  // null: send no effort (Haiku 5.5 has none).
   effort: Effort | null;
 }
 
 // turn.step names the request's model by id; the CLI flags take aliases.
 export const CLAUDE_MODEL_IDS: Readonly<Record<string, string>> = {
-  haiku: 'claude-haiku-4-5',
+  haiku: 'claude-haiku-5-5',
   sonnet: 'claude-sonnet-5-5',
   opus: 'claude-opus-5-5',
   fable: 'claude-fable-5-1',
@@ -24,7 +24,7 @@ export function claudeModelId(model: string): string {
   return CLAUDE_MODEL_IDS[model] ?? model;
 }
 
-// A dated (`claude-haiku-4-5-20251001`) or suffixed (`claude-opus-5-5[1m]`) id names the same model.
+// A dated (`claude-haiku-5-5-20251001`) or suffixed (`claude-opus-5-5[1m]`) id names the same model.
 export function claudeAlias(model: string): string {
   for (const [alias, id] of Object.entries(CLAUDE_MODEL_IDS)) {
     if (model === id || model.startsWith(`${id}-`) || model.startsWith(`${id}[`)) return alias;

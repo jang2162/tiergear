@@ -7,7 +7,7 @@ import { statusCommand } from '../src/cli/status.js';
 import { statusPath, type StatusRecord } from '../src/core/status.js';
 
 const record = (session: string, over: Partial<StatusRecord> = {}): StatusRecord => ({
-  session, tier: 'deep', model: 'opus', effort: 'xhigh', paused: false, reason: 'first turn', line: 'tiergear · deep 0.80 → opus/xhigh', updatedAt: 1, ...over,
+  session, tier: 'deep', model: 'opus', effort: 'high', paused: false, reason: 'first turn', line: 'tiergear · deep 0.80 → opus/high', updatedAt: 1, ...over,
 });
 
 async function homeWith(...records: StatusRecord[]): Promise<string> {
@@ -42,12 +42,12 @@ describe('statusCommand', () => {
 
   it('prefers --session to stdin', async () => {
     const home = await homeWith(record('s1'), record('s2', { paused: true, model: 'sonnet', effort: 'medium' }));
-    expect(await run(home, { session: 's2', stdin: stdin(JSON.stringify({ session_id: 's1' })) })).toBe('paused · sonnet/medium');
+    expect(await run(home, { session: 's2', stdin: stdin(JSON.stringify({ session_id: 's1' })) })).toBe('manual · sonnet/medium');
   });
 
   it('falls back to the session updated last when none is named', async () => {
     const home = await homeWith(record('old', { tier: 'trivial', updatedAt: 1 }), record('new', { tier: 'max', updatedAt: 9 }));
-    expect(await run(home, { stdin: stdin('not json') })).toBe('max · opus/xhigh');
+    expect(await run(home, { stdin: stdin('not json') })).toBe('max · opus/high');
   });
 
   it('prints nothing for a session with no status yet, and null as JSON', async () => {
@@ -69,16 +69,16 @@ describe('statusCommand', () => {
   });
 
   it('fills a value tiergear does not know yet from the session', async () => {
-    const home = await homeWith(record('s1', { model: null, effort: 'xhigh' }));
+    const home = await homeWith(record('s1', { model: null, effort: 'high' }));
     const input = stdin(JSON.stringify({ session_id: 's1', model: { id: 'claude-sonnet-5-5[1m]' }, effort: { level: 'medium' } }));
-    expect(await run(home, { stdin: input })).toBe('deep · sonnet/xhigh');
+    expect(await run(home, { stdin: input })).toBe('deep · sonnet/high');
   });
 
   it('prints one value when a field is named', async () => {
     const home = await homeWith(record('s1', { paused: true, model: 'sonnet', effort: 'medium' }));
     expect(await run(home, { session: 's1', field: 'model' })).toBe('sonnet');
     expect(await run(home, { session: 's1', field: 'effort' })).toBe('medium');
-    expect(await run(home, { session: 's1', field: 'state' })).toBe('paused');
+    expect(await run(home, { session: 's1', field: 'state' })).toBe('manual');
     expect(await run(home, { session: 's1', field: 'tier' })).toBe('deep');
     expect(await run(home, { session: 'other', field: 'model' })).toBe('');
   });
@@ -86,7 +86,7 @@ describe('statusCommand', () => {
   it('prints the whole record as JSON, or fills a template', async () => {
     const home = await homeWith(record('s1'));
     expect(JSON.parse(await run(home, { session: 's1', json: true }))).toEqual(record('s1'));
-    expect(await run(home, { session: 's1', format: '{model}·{effort} ({tier})' })).toBe('opus·xhigh (deep)');
+    expect(await run(home, { session: 's1', format: '{model}·{effort} ({tier})' })).toBe('opus·high (deep)');
   });
 });
 
@@ -103,7 +103,7 @@ describe('tiergear status', () => {
     vi.spyOn(console, 'log').mockImplementation((line: string) => void logs.push(line));
     expect(await main(['status', '--session', 's1'])).toBe(0);
     expect(await main(['status', '--session', 'nope'])).toBe(0);
-    expect(logs).toEqual(['deep · opus/xhigh']);
+    expect(logs).toEqual(['deep · opus/high']);
   });
 
   it('prints the field named after status, and refuses an unknown one', async () => {
@@ -114,7 +114,7 @@ describe('tiergear status', () => {
     vi.spyOn(console, 'error').mockImplementation((line: string) => void errors.push(line));
     expect(await main(['status', 'effort', '--session', 's1'])).toBe(0);
     expect(await main(['status', 'model', '--session', 's1'])).toBe(0);
-    expect(logs).toEqual(['xhigh', 'opus']);
+    expect(logs).toEqual(['high', 'opus']);
     expect(await main(['status', 'colour', '--session', 's1'])).toBe(2);
     expect(errors.join('\n')).toContain('tiergear status [tier|state|model|effort]');
   });

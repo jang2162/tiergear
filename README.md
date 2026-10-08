@@ -3,11 +3,11 @@
 A plugin and CLI that lets a decision model (the judge) pick the model and reasoning effort for Claude Code sessions and Orca workers.
 
 - **First turn**: the first prompt goes to the judge, which returns a tier (trivial, quick, standard, deep, max). Tables A and B turn that into a model and effort. The first turn has no cache to lose, so the model changes too.
-- **Later turns**: by default the model stays and only effort changes. Raising is easy (confidence 0.5); lowering is hard (confidence 0.85 for 2 turns in a row), unless the optional instant switch is on and the judge is sure enough.
+- **Later turns**: by default the model stays and only effort changes. Raising is easy (confidence 0.5); lowering is hard (confidence 0.85 for 2 turns in a row), unless the optional instant switch is on and the judge is sure enough. With the model held, trivial is off after the first prompt: on one model it only repeats quick's effort, so lowering stops at quick and a trivial pick becomes quick. A session that starts on trivial stays there until it moves.
 - **Floor**: the tier never drops below one step under the first decision. Sessions started with `tiergear launch`/`orca-spawn` use the launch tier itself as their floor, so a `--min-tier` holds for the whole session.
 - **Ceiling**: a session launched with `--max-tier` never rises above it, whether the judge asks for a harder tier or the session looks stuck.
-- **Pick a tier, or off, from the band**: the band above the prompt has a button per tier and one for **off** (see [Status band](#status-band)). A picked tier is a starting point; the judge keeps moving it as usual. **off** withdraws what tiergear applies until you pick a tier again.
-- **Manual changes pause routing**: changing the model or effort yourself with `/model` or `/effort` mid-session pauses the session, just like picking **off**, and writes `[tiergear] manual model/effort change — routing paused for this session` to the hook log once. Pick a tier to hand it back to tiergear. It compares the session values the engine reports between turns, so tiergear's own changes don't trigger it. If the engine switches to a fallback model from the first request of a turn, that can also look like a manual change.
+- **Pick a tier, or manual, from the band**: the band above the prompt has a button per tier and one for **manual** (see [Status band](#status-band)). A picked tier is a starting point; the judge keeps moving it as usual. **manual** withdraws what tiergear applies until you pick a tier again.
+- **Manual changes stand, routing carries on**: changing the model or effort yourself with `/model` or `/effort` mid-session keeps your values until the judge moves the tier; the move then works from the model you chose. Only **manual** stops routing. The change is spotted by comparing the session values the engine reports between turns, so tiergear's own changes don't count. If the engine switches to a fallback model from the first request of a turn, that can also look like a manual change.
 
 If the judge is slow or fails, that turn proceeds untouched.
 
@@ -77,28 +77,28 @@ All three judges use TypeSafe's `<baseUrl>/v1/systemone` contract. The default i
 
 | Tier | Claude | Codex |
 | --- | --- | --- |
-| trivial | sonnet | gpt-5.6-luna |
+| trivial | haiku | gpt-5.6-luna |
 | quick | sonnet | gpt-5.6-terra |
 | standard | sonnet | gpt-5.6-terra |
 | deep | opus | gpt-5.6-terra |
 | max | fable | gpt-5.6-terra |
 
-Claude's trivial tier uses sonnet, not haiku: Claude Code's auto mode doesn't run on haiku, so a haiku session stops to ask for approval on commands. If you run with permission checks off, see [Haiku for trivial](#haiku-for-trivial-bypass-permissions-users).
+Claude's trivial tier uses haiku. Claude Code's auto mode may not run on haiku, so a haiku session could stop to ask for approval on commands. If that happens, see [Sonnet for trivial](#sonnet-for-trivial-auto-mode-users).
 
-**Table B: effort per model** (`-` means no effort is sent; the haiku row applies only if you put haiku in Table A)
+**Table B: effort per model** (`-` means no effort is sent; the haiku row applies to trivial, the default, and to any tier you move to haiku)
 
 | Model | trivial | quick | standard | deep | max |
 | --- | --- | --- | --- | --- | --- |
-| haiku | - | - | - | - | - |
+| haiku | low | medium | high | - | - |
 | sonnet | low | low | medium | high | max |
-| opus | low | low | medium | xhigh | max |
+| opus | low | low | medium | high | max |
 | fable | low | low | medium | high | xhigh |
 | gpt-5.6-luna (Codex) | low | low | medium | high | high |
 | gpt-5.6-terra (Codex) | low | low | medium | xhigh | max |
 
 On Codex, deep and max both use `gpt-5.6-terra`; only the effort differs (xhigh vs max).
 
-A session on a model without effort (haiku, if you set it) can't be raised through effort alone, so raising the tier switches to that tier's model even when `switchModelMidSession=false` (the cache breaks once).
+A session on a model without effort can't be raised through effort alone, so raising the tier switches to that tier's model even when `switchModelMidSession=false` (the whole cache is lost once, since each model has its own cache).
 
 ### Customizing the tables
 
@@ -110,12 +110,12 @@ Put only the cells you want to change in `~/.config/tiergear/tables.json`; they 
 
 Model cells go under `models`, as in `{"claude":{"models":{"deep":"opus"}}}`. A model must be a plain id (letters, digits, `.`, `_`, `-`, `:`, `/` and brackets as in `opus[1m]`), since it ends up in a launch command a shell reads. Effort values are low, medium, high, xhigh, max, or `null`. If any value or the JSON itself is invalid, **the whole file is ignored** and the default tables are used (this is noted in the hook log). Hooks read the file once, the first time it's needed after session start, so open a new session after editing it.
 
-### Haiku for trivial (bypass-permissions users)
+### Sonnet for trivial (auto mode users)
 
-If you run Claude Code with permission checks off ("yolo" mode), auto mode doesn't matter and haiku is the cheaper choice for trivial work. Put it back with one cell:
+If you rely on auto mode and find trivial sessions stop to ask for approval, put sonnet back with one cell:
 
 ```json
-{ "claude": { "models": { "trivial": "haiku" } } }
+{ "claude": { "models": { "trivial": "sonnet" } } }
 ```
 
 Permission checks can be turned off in two ways:
@@ -127,7 +127,7 @@ Permission checks can be turned off in two ways:
   { "permissions": { "defaultMode": "bypassPermissions" } }
   ```
 
-Use the settings file if you start workers with tiergear. `tiergear launch` prints a command with only `--model` and `--effort`, `orca-spawn` starts the agent with that command, and inside a Run Orca's `worker-start` builds the command itself, so none of them adds the flag. With only the flag, a haiku worker asks for approval again.
+Use the settings file if you start workers with tiergear. `tiergear launch` prints a command with only `--model` and `--effort`, `orca-spawn` starts the agent with that command, and inside a Run Orca's `worker-start` builds the command itself, so none of them adds the flag. With only the flag, a haiku worker may ask for approval again.
 
 **Bypass mode runs every tool call without asking.** Use it only where you accept that, such as a sandbox or a throwaway worktree.
 
@@ -141,7 +141,7 @@ Change these in `/config` (plugin options).
 | `judgeBaseUrl` | preset | Leave empty for the preset's address. Must be https, or http to localhost |
 | `judgeModel` | preset | Leave empty for the preset's model |
 | `judgeApiKey` | preset env var | Leave empty to use TYPESAFE_API_KEY, OLLAYA_API_KEY, or KEV_API_KEY, which only go to the preset's own address (sensitive) |
-| `switchModelMidSession` | `false` | Also change the model after the first turn. Off: only effort changes. Either change breaks the messages prompt cache; a model change also breaks the tools and system caches |
+| `switchModelMidSession` | `false` | Also change the model after the first turn. Off: only effort changes. A model change always loses the whole cache, since each model has its own; an effort change keeps it on Opus 5.5, Sonnet 5.5, Haiku 5.5 and Fable 5.1 (see [Cost](#cost)) |
 | `instantSwitchConfidence` | off | Confidence · instant switch: a lower tier the judge is at least this sure of applies at once, straight to that tier (never under the floor), skipping `downgradeStreak`. Leave unset or 0 to keep it off |
 | `minDowngradeConfidence` | `0.85` | Confidence · lower: minimum confidence for a turn to count toward lowering |
 | `minUpgradeConfidence` | `0.5` | Confidence · raise: minimum confidence to raise the tier |
@@ -155,49 +155,49 @@ Change these in `/config` (plugin options).
 | `showStatusText` | `true` | Show the line's parts below (all four at once). Turn it off when a status line tool shows them (see [Status line tools](#status-line-tools-ccstatusline)) |
 | `showTier` | `true` | The tier, `deep` |
 | `showConfidence` | `true` | The judge's confidence, `0.91` (`n/d` without one) |
-| `showModelEffort` | `true` | The model and effort in effect, `opus/xhigh` (`→ opus/xhigh` when tiergear just applied them) |
+| `showModelEffort` | `true` | The model and effort in effect, `opus/high` (`→ opus/high` when tiergear just applied them) |
 | `showReason` | `true` | Why nothing changed, `unchanged (same tier)` |
-| `showTierButtons` | `true` | Show the off and tier buttons above the prompt |
+| `showTierButtons` | `true` | Show the manual and tier buttons above the prompt |
 | `showFloor` | `true` | Show the floor picker above the prompt |
 
 ## Status band
 
-tiergear shows its state in one row just above the prompt: a line, the **Tier** picker (off and a button per tier), the **Floor** picker, and **[ Recent ]**. The choice in effect is bracketed; the others are dim.
+tiergear shows its state in one row just above the prompt: a line, the **Tier** picker (manual and a button per tier), the **Floor** picker, and **[ Recent ]**. The choice in effect is bracketed; the others are dim.
 
 ```
-tiergear · deep 0.91 → opus/xhigh  | Tier:: off  ~~trivial~~  quick  standard  [deep]  max | Floor: quick |  [ Recent ]
+tiergear · deep 0.91 → opus/high  | Tier:: manual  ~~trivial~~  quick  standard  [deep]  max | Floor: quick |  [ Recent ]
 ```
 
 It doesn't use the status line below the prompt. Before anything is decided the line reads just `tiergear` and no button is bracketed.
 
 The line starts with `tiergear ·` and shows the model and effort the session is running on as `model/effort`; a model without effort shows `-`.
 
-- Applied: `tiergear · deep 0.91 → opus/xhigh`.
-- Unchanged: `tiergear · standard 0.62 · sonnet/medium · unchanged (<reason>)`. When tiergear isn't overriding anything (low confidence, off), this is the session's own model and effort.
+- Applied: `tiergear · deep 0.91 → opus/high`.
+- Unchanged: `tiergear · standard 0.62 · sonnet/medium · unchanged (<reason>)`. When tiergear isn't overriding anything (low confidence, manual), this is the session's own model and effort.
 - The line is set when a prompt is judged, then refreshed with the values the engine reports when the turn starts. Before the session's first turn the values may not be known yet: an unchanged line then leaves them out, and an applied line shows only the effort if tiergear isn't setting the model.
 - `unset` appears when no tier has been decided yet, and `n/d` takes the place of the confidence when the judge gave no answer (as after a pick from the band).
 
-Reasons for no change: `no answer` (no judge response), `low confidence`, `same tier`, `paused` (off is chosen), `manual tier` (the first prompt runs on a tier picked before it), `floor set` (the floor was changed by hand), `at floor` (can't go lower), `at ceiling` (can't go higher than the launch's `--max-tier`), `easier step N/M` (Nth lowering candidate, M needed), `stuck at max`.
+Reasons for no change: `no answer` (no judge response), `low confidence`, `same tier`, `manual` (manual is chosen), `manual tier` (the first prompt runs on a tier picked before it), `manual change` (you changed the model or effort with `/model` or `/effort`), `floor set` (the floor was changed by hand), `at floor` (can't go lower), `at ceiling` (can't go higher than the launch's `--max-tier`), `easier step N/M` (Nth lowering candidate, M needed), `stuck at max`.
 
 ### Tier buttons and floor
 
-- **Floor** picks the lowest tier the session may go to. A tier above the current one raises the session to it at once. A tier under the floor is struck through and can't be clicked; lower the floor first. A floor above a launch's `--max-tier` stops at it. Set before the first prompt, the first decided tier starts no lower than it. The floor picker is a select: click or focus it, then use the arrow keys and Enter.
+- **Floor** picks the lowest tier the session may go to. A tier above the current one raises the session to it at once. A tier under the floor is struck through and can't be clicked; lower the floor first. With the model held (`switchModelMidSession=false`), trivial is struck through after the first prompt. A floor above a launch's `--max-tier` stops at it. Set before the first prompt, the first decided tier starts no lower than it. The floor picker is a select: click or focus it, then use the arrow keys and Enter.
 
 - One click picks. A tier applies from the next request, even in the middle of a running turn. Mid-session only the effort changes (from the session model's column in table B), unless `switchModelMidSession` is on. The judge goes on from the picked tier by the usual rules. A pick below the floor lowers the floor to it. A pick may go above a launch's `--max-tier`, but the judge still won't raise past it.
 - Picked before the first prompt, a tier works like a launch tier: the first turn runs on its table A model and effort without asking the judge, and the judge takes over from the second prompt.
-- **off** withdraws the model and effort tiergear applies, so the session runs on its own (startup flags, `/model`, `/effort`), and stops asking the judge. `[off]` stays bracketed until you pick a tier.
-- Picking a tier while off turns tiergear back on at that tier, on the session's own model with the effort from the tier, and the judge is asked again from the next prompt. That prompt becomes the task the judge reads.
+- **manual** withdraws the model and effort tiergear applies, so the session runs on its own (startup flags, `/model`, `/effort`), and stops asking the judge. `[manual]` stays bracketed until you pick a tier.
+- Picking a tier while manual turns tiergear back on at that tier, on the session's own model with the effort from the tier, and the judge is asked again from the next prompt. That prompt becomes the task the judge reads.
 
 ### Recent decisions
 
 Press **[ Recent ]** to open a pane listing this session's decisions, newest first, and press it again to close it. `/tiergear` opens the pane too. To hide the button, turn off `showRecentButton` in the plugin options. Each part of the band has its own option (`showPrefix`, `showStatusText` and the line's parts, `showTierButtons`, `showFloor`, `showRecentButton`); with all of them off the band draws nothing.
 
 ```
-12:11  judge quick 0.44 → hold deep (low confidence) · opus/xhigh
-11:16  judge deep 0.52 → up deep (harder step) · opus/xhigh
+12:11  judge quick 0.44 → hold deep (low confidence) · opus/high
+11:16  judge deep 0.52 → up deep (harder step) · opus/high
 ```
 
-Each line is: time, what the judge proposed and its confidence, what tiergear did and the resulting tier (with the reason), and the model/effort tiergear applied (`session` when it applied nothing). `judge skipped` means the judge wasn't asked (a launch floor, a picked tier, off, a paused judge); a failure shows its reason, like `judge timed out after 2000ms`. A pick from the band (a tier or off) reads `manual` instead, as in `manual → set quick (manual tier) · opus/low`. The pane reads the decision log, so it still works after a plugin reload; the line comes back with the next judged prompt.
+Each line is: time, what the judge proposed and its confidence, what tiergear did and the resulting tier (with the reason), and the model/effort tiergear applied (`session` when it applied nothing). `judge skipped` means the judge wasn't asked (a launch floor, a picked tier, manual, a paused judge); a failure shows its reason, like `judge timed out after 2000ms`. A pick from the band (a tier or manual) reads `manual` instead, as in `manual → set quick (manual tier) · opus/low`. The pane reads the decision log, so it still works after a plugin reload; the line comes back with the next judged prompt.
 
 ### Status line tools (ccstatusline)
 
@@ -209,9 +209,9 @@ tiergear status [tier|state|model|effort] [--session <id>] [--json] [--format <t
 
 - The session is `--session`, else the `session_id` of the status JSON piped on stdin (what a status line command receives), else the session updated last.
 - Before tiergear has a value for the session (a new session, the first turn), the model and effort come from the status JSON on stdin, the session's own; the tier stays empty. A value tiergear doesn't know yet is filled the same way.
-- Default output: `deep · opus/xhigh`, `paused · sonnet/medium` when paused; nothing (exit 0) when neither tiergear nor the status JSON on stdin has a value, so a widget hides. The stdin fallback applies only without `--session`.
-- A field prints that value alone, for a widget of its own: `tiergear status model` prints `opus`, `tiergear status effort` prints `xhigh`, `tiergear status tier` prints `deep`, `tiergear status state` prints `auto` or `paused`. An unknown value prints nothing. A field wins over `--json` and `--format`.
-- `--format` fills `{tier}`, `{model}`, `{modelName}` (as Claude Code names it, `Opus 5.5`), `{effort}`, `{state}` (`auto` or `paused`) and `{line}` (the band's text); an unknown value is `-` (`unset` for the tier), and a template with no known value in it prints nothing. `--json` prints the whole record, or `null`.
+- Default output: `deep · opus/high`, `manual · sonnet/medium` when manual; nothing (exit 0) when neither tiergear nor the status JSON on stdin has a value, so a widget hides. The stdin fallback applies only without `--session`.
+- A field prints that value alone, for a widget of its own: `tiergear status model` prints `opus`, `tiergear status effort` prints `high`, `tiergear status tier` prints `deep`, `tiergear status state` prints `auto` or `manual`. An unknown value prints nothing. A field wins over `--json` and `--format`.
+- `--format` fills `{tier}`, `{model}`, `{modelName}` (as Claude Code names it, `Opus 5.5`), `{effort}`, `{state}` (`auto` or `manual`) and `{line}` (the band's text); an unknown value is `-` (`unset` for the tier), and a template with no known value in it prints nothing. `--json` prints the whole record, or `null`.
 
 With the line shown there, turn off `showStatusText` to keep the band to its buttons.
 
@@ -226,7 +226,7 @@ tiergear stats [days]
 tiergear status [tier|state|model|effort] [--session <id>] [--json] [--format <template>]
 ```
 
-- `launch`: judges the brief and prints the command to run (e.g. `claude --model opus --effort xhigh`). With Claude, `--worktree` writes a floor for that path. The path is stored as an absolute real path (symlinks resolved), so a relative path still works for a session opened in that folder. With `--agent codex`, floors are Claude-only, so none is written and a one-line note is printed instead.
+- `launch`: judges the brief and prints the command to run (e.g. `claude --model opus --effort high`). With Claude, `--worktree` writes a floor for that path. The path is stored as an absolute real path (symlinks resolved), so a relative path still works for a session opened in that folder. With `--agent codex`, floors are Claude-only, so none is written and a one-line note is printed instead.
 - `orca-spawn`: needs Orca, the multi-agent IDE, with its `orca` CLI on your PATH (or named by `ORCA_CLI_COMMAND`). It creates an Orca worktree, writes the floor, and starts the agent there with the judged model and effort. Prints the result as JSON. `--base-branch` picks the ref the worktree starts from; without it Orca uses the repo's default base, which may be a remote branch behind your local one. A brief that starts with `!` or `/` (which the agent's prompt would run as a shell or slash command) or holds control characters other than line breaks and tabs is refused before the judge is asked.
   - **Inside an orchestration Run** (run from the coordinator terminal after `orca orchestration run-create`): starts the agent with `orca orchestration worker-start`, so the worker gets Orca's lifecycle preamble and reports `worker_done` to the Run. The JSON includes `dispatch` (`runId`, `taskId`, `dispatchId`, `handle`). A failed `worker-start` exits non-zero with Orca's error; don't rerun it blindly, since Orca may have left resources behind.
   - **Without a Run**: creates a terminal, waits for the agent, then types the brief as is (no preamble, `dispatch` is `null`). If Claude asks whether to trust the folder, **`orca-spawn` does not approve it for you.** Approve it yourself in Orca within 120 seconds. If the agent isn't ready, the brief is **not sent** (exit code 1) and a fallback shell may be left in the worktree.
@@ -256,15 +256,17 @@ The CLI can't read plugin options, so it looks up settings from flags, then envi
 | Floors (valid 24 hours) | `~/.local/state/tiergear/floors/<fnv1a(worktree)>.json` |
 | Decision log (1000 lines per file; one file per session, not removed) | `~/.local/state/tiergear/decisions/<name>.jsonl` |
 | Status for status line tools (one small file per session, not removed) | `~/.local/state/tiergear/status/<session>.json` |
-| Session records (kept 7 days, newest 200) | Plugin `$.store` under `session:<id>` (the first prompt is truncated to 2000 characters, and dropped while a session is paused) |
+| Session records (kept 7 days, newest 200) | Plugin `$.store` under `session:<id>` (the first prompt is truncated to 2000 characters, and dropped while a session is manual) |
 
 Raw prompt text is never written to the logs.
 
 ## Cost
 
-- Changing the model and changing effort mid-session both invalidate the messages prompt cache (per Anthropic's docs). The first turn has no cache, so it costs nothing.
-- That's why the default mid-session change is effort only, and lowering only happens after repeated high-confidence turns, to keep changes rare.
-- Raising from a model without effort, like haiku if you set it, switches the model and breaks the cache once.
+- **A model change always loses the whole cache.** Each model has its own cache, so the next request reads the full history with no hits, even if the content is identical ([Claude Code docs](https://code.claude.com/docs/en/prompt-caching#switching-models)).
+- **An effort change usually keeps it.** On Opus 5.5, Sonnet 5.5, Haiku 5.5 and Fable 5.1 with an API key or a Claude subscription, Claude Code changes effort without losing the cache. On other models, on Amazon Bedrock, Google Cloud's Agent Platform or a Claude apps gateway, with `CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS` set, or under a HIPAA configuration, it still loses the messages cache ([Claude Code docs](https://code.claude.com/docs/en/prompt-caching#changing-effort-level), [API docs](https://platform.claude.com/docs/en/build-with-claude/prompt-caching)). This is the documented behavior for effort set by Claude Code itself; whether tiergear's override of a request's effort is treated the same hasn't been verified, so check `Prompt cache (main)` in `/usage`.
+- **Nothing is lost on the first turn, or once the cache has expired** (one hour for the main conversation on a Claude subscription, five minutes with an API key or a cloud provider).
+- That's why the default mid-session change is effort only, and lowering only happens after repeated high-confidence turns, to keep changes rare. It's also why the haiku column in Table B has quick and standard filled in: trivial can rise there without leaving haiku.
+- Raising from a model without effort switches the model and loses the cache once.
 - The judge call itself adds cost and latency to every judged prompt (within the timeouts above).
 
 ## Data sent to the judge

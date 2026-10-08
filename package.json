@@ -1,6 +1,6 @@
 {
   "name": "tiergear",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Let a decision model pick the model and reasoning effort for Claude Code sessions and Orca workers",
   "type": "module",
   "license": "MIT",
@@ -11,7 +11,14 @@
   },
   "homepage": "https://github.com/jang2162/tiergear#readme",
   "bugs": "https://github.com/jang2162/tiergear/issues",
-  "keywords": ["claude-code", "claude", "plugin", "reasoning-effort", "model-routing", "orca"],
+  "keywords": [
+    "claude-code",
+    "claude",
+    "plugin",
+    "reasoning-effort",
+    "model-routing",
+    "orca"
+  ],
   "engines": {
     "node": ">=20"
   },

@@ -14,7 +14,7 @@ describe('planLaunch', () => {
     expect(plan).toMatchObject({ tier: 'deep', judgedTier: 'deep', confidence: 0.8, warning: null, command: 'codex --model gpt-5.6-terra -c model_reasoning_effort="xhigh"' });
     expect(plan.floor).toEqual({ tier: 'deep' });
     const trivial = await planLaunch({ ...base, harness: 'claude', judge: judgeSaying({ ok: true, verdict: { tier: { tier: 'trivial', confidence: 0.9 }, stuck: null } }) });
-    expect(trivial.command).toBe('claude --model sonnet --effort low');
+    expect(trivial.command).toBe('claude --model haiku --effort low');
   });
 
   it('falls back to standard with a warning and no floor on failure or low confidence', async () => {
@@ -31,7 +31,7 @@ describe('planLaunch', () => {
 describe('planLaunch with a tier range', () => {
   it('clamps the judged tier into the range and keeps both tiers', async () => {
     const raised = await planLaunch({ ...base, harness: 'claude', judge: confident('quick'), range: { min: 'deep' } });
-    expect(raised).toMatchObject({ judgedTier: 'quick', tier: 'deep', command: 'claude --model opus --effort xhigh', warning: null });
+    expect(raised).toMatchObject({ judgedTier: 'quick', tier: 'deep', command: 'claude --model opus --effort high', warning: null });
     expect(raised.floor).toEqual({ tier: 'deep' });
     const lowered = await planLaunch({ ...base, harness: 'claude', judge: confident('max'), range: { max: 'standard' } });
     expect(lowered).toMatchObject({ judgedTier: 'max', tier: 'standard', command: 'claude --model sonnet --effort medium' });
@@ -40,7 +40,7 @@ describe('planLaunch with a tier range', () => {
 
   it('clamps the standard fallback and still floors the range when the judge fails, gives no tier or is unsure', async () => {
     const failed = await planLaunch({ ...base, harness: 'claude', judge: judgeSaying({ ok: false, reason: 'offline' }), range: { min: 'deep', max: 'max' } });
-    expect(failed).toMatchObject({ judgedTier: null, tier: 'deep', command: 'claude --model opus --effort xhigh', floor: { tier: 'deep', ceiling: 'max' } });
+    expect(failed).toMatchObject({ judgedTier: null, tier: 'deep', command: 'claude --model opus --effort high', floor: { tier: 'deep', ceiling: 'max' } });
     expect(failed.warning).toContain('using deep');
     const silent = await planLaunch({ ...base, harness: 'claude', judge: judgeSaying({ ok: true, verdict: { tier: null, stuck: null } }), range: { min: 'deep' } });
     expect(silent).toMatchObject({ judgedTier: null, tier: 'deep', floor: { tier: 'deep' } });

@@ -7,8 +7,8 @@ import { DEFAULT_TABLES } from '../src/core/tables.js';
 import type { TierRange } from '../src/core/tiers.js';
 
 const plan: LaunchPlan = {
-  tier: 'deep', judgedTier: 'deep', confidence: 0.8, target: { model: 'opus', effort: 'xhigh' },
-  command: 'claude --model opus --effort xhigh', warning: null, outcome: 'ok', ms: 300, floor: { tier: 'deep' },
+  tier: 'deep', judgedTier: 'deep', confidence: 0.8, target: { model: 'opus', effort: 'high' },
+  command: 'claude --model opus --effort high', warning: null, outcome: 'ok', ms: 300, floor: { tier: 'deep' },
 };
 
 const planned = (result: AskResult, range: TierRange) =>
@@ -64,7 +64,7 @@ describe('spawnWorker without a bound run', () => {
     expect(result).toEqual({ status: 'sent', worktree: { id: 'r1::/w/task', path: '/w/task' }, handle: 'h1', dispatch: null });
     expect(calls[0]!.args).toEqual(['orchestration', 'run-current']);
     expect(calls[1]).toEqual({ args: ['worktree', 'create', '--name', 'task', '--no-parent'], cwd: '/repo' });
-    expect(calls[2]!.args).toEqual(['terminal', 'create', '--worktree', 'id:r1::/w/task', '--title', 'task', '--command', 'claude --model opus --effort xhigh']);
+    expect(calls[2]!.args).toEqual(['terminal', 'create', '--worktree', 'id:r1::/w/task', '--title', 'task', '--command', 'claude --model opus --effort high']);
     expect(calls.at(-1)!.args).toEqual(['terminal', 'send', '--terminal', 'h1', '--text', brief, '--enter']);
     expect(floors).toEqual(['/w/task']);
   });
@@ -115,7 +115,7 @@ describe('spawnWorker with a bound run', () => {
     expect(events).toEqual(['orchestration run-current', 'worktree create', 'floor /w/task', 'orchestration worker-start']);
     expect(calls.at(-1)!.args).toEqual([
       'orchestration', 'worker-start', '--spec', 'fix it', '--task-title', 'task', '--worktree', 'id:r1::/w/task',
-      '--agent', 'claude', '--model', 'opus', '--effort', 'xhigh', '--timeout-ms', '180000',
+      '--agent', 'claude', '--model', 'opus', '--effort', 'high', '--timeout-ms', '180000',
     ]);
     expect(result).toEqual({
       status: 'sent',

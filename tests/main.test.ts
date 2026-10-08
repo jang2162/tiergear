@@ -120,7 +120,7 @@ describe('main', () => {
     } finally {
       await judge.close();
     }
-    expect(logs).toEqual(['claude --model opus --effort xhigh']);
+    expect(logs).toEqual(['claude --model opus --effort high']);
     expect(errors).toContain('tiergear: judged quick, applied deep');
     expect(await readFloorOf(home, worktree)).toMatchObject({ tier: 'deep', ceiling: 'max' });
   });
@@ -131,7 +131,7 @@ describe('main', () => {
     process.env['HOME'] = home;
     const { errors, logs } = capture();
     expect(await main(['launch', 'review the diff', '--worktree', worktree, '--min-tier', 'deep', '--judge', 'laya', '--judge-url', 'http://127.0.0.1:9'])).toBe(0);
-    expect(logs).toEqual(['claude --model opus --effort xhigh']);
+    expect(logs).toEqual(['claude --model opus --effort high']);
     expect(errors).toContain('tiergear: judged none, applied deep');
     expect(errors.some((l) => l.includes('no floor written'))).toBe(false);
     expect(await readFloorOf(home, worktree)).toMatchObject({ tier: 'deep' });
@@ -174,10 +174,10 @@ describe('main', () => {
     } finally {
       await judge.close();
     }
-    expect(JSON.parse(logs[0]!)).toMatchObject({ status: 'sent', tier: 'deep', judgedTier: 'quick', command: 'claude --model opus --effort xhigh' });
+    expect(JSON.parse(logs[0]!)).toMatchObject({ status: 'sent', tier: 'deep', judgedTier: 'quick', command: 'claude --model opus --effort high' });
     expect(await readFloorOf(home, worktree)).toMatchObject({ tier: 'deep', ceiling: 'max' });
     const calls = (await readFile(join(scratch, 'calls.jsonl'), 'utf8')).trim().split('\n').map((l) => (JSON.parse(l) as string[]).join(' '));
-    expect(calls.some((c) => c.includes(run ? '--model opus --effort xhigh' : 'claude --model opus --effort xhigh'))).toBe(true);
+    expect(calls.some((c) => c.includes(run ? '--model opus --effort high' : 'claude --model opus --effort high'))).toBe(true);
   });
 
   it('names the Orca command orca-spawn and no longer accepts spawn', async () => {
