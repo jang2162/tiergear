@@ -15,6 +15,22 @@ If the judge is slow or fails, that turn proceeds untouched.
 
 Only prompts the user typed are judged: terminal input (`composer`), Remote Control (`bridge`), and the SDK or `claude -p` (`sdk`). Background task notifications, scheduled tasks and `/loop`, messages from other sessions or SendMessage, observers, auto-continue, plugin-sent prompts, and unknown origins (`unclassified`) pass through unjudged, and the tier and applied values stay as they are. Prompts that enter a running turn (including ones typed and queued while a turn runs) are not judged. Slash commands starting with `/` are not judged.
 
+## Example
+
+One session, three steps. The band above the prompt shows the tier in effect (bracketed), and **[ Recent ]** opens the pane on the right with each decision.
+
+**1. An easy first question starts small.** The judge calls it trivial (0.79), so the first turn runs on `haiku/low`.
+
+![A trivial question: the judge sets trivial on the first turn, haiku/low](docs/images/example-1-trivial.png)
+
+**2. A hard question raises the tier at once.** The next prompt is a distributed rate limiter design. The judge answers deep (0.96), and tiergear raises to deep, `opus/high`. Raising needs only a confidence of 0.5, so one prompt is enough. Haiku has no deep effort in Table B, so the model moves to opus here and the cache is lost once.
+
+![A hard design question: the judge raises the tier to deep, opus/high](docs/images/example-2-deep.png)
+
+**3. Easy questions bring it down slowly.** Back to small questions, the first trivial answer (0.97) only counts as `easier step 1/2` and the session holds on deep. The second one (0.94) lowers it one step to standard, `opus/medium`. The model stays on opus the whole time, so only the effort changes. Trivial is struck through: with the model held it would only repeat quick's effort, so lowering stops at quick.
+
+![Easy questions after a hard one: hold on deep at step 1/2, then down to standard, opus/medium](docs/images/example-3-standard.png)
+
 ## Install
 
 Requires Claude Code 2.1.289 or later. At the prompt of a Claude Code session:
