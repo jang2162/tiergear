@@ -1,6 +1,6 @@
 {
   "name": "tiergear",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "A decision model picks the model and reasoning effort for each session and adjusts effort as the work changes.",
   "author": { "name": "jang2162" },
   "license": "MIT",

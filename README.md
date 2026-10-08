@@ -21,15 +21,15 @@ One session, three steps. The band above the prompt shows the tier in effect (br
 
 **1. An easy first question starts small.** The judge calls it trivial (0.79), so the first turn runs on `haiku/low`.
 
-![A trivial question: the judge sets trivial on the first turn, haiku/low](docs/images/example-1-trivial.png)
+![A trivial question: the judge sets trivial on the first turn, haiku/low](https://raw.githubusercontent.com/jang2162/tiergear/main/docs/images/example-1-trivial.png)
 
 **2. A hard question raises the tier at once.** The next prompt is a distributed rate limiter design. The judge answers deep (0.96), and tiergear raises to deep, `opus/high`. Raising needs only a confidence of 0.5, so one prompt is enough. Haiku has no deep effort in Table B, so the model moves to opus here and the cache is lost once.
 
-![A hard design question: the judge raises the tier to deep, opus/high](docs/images/example-2-deep.png)
+![A hard design question: the judge raises the tier to deep, opus/high](https://raw.githubusercontent.com/jang2162/tiergear/main/docs/images/example-2-deep.png)
 
 **3. Easy questions bring it down slowly.** Back to small questions, the first trivial answer (0.97) only counts as `easier step 1/2` and the session holds on deep. The second one (0.94) lowers it one step to standard, `opus/medium`. The model stays on opus the whole time, so only the effort changes. Trivial is struck through: with the model held it would only repeat quick's effort, so lowering stops at quick.
 
-![Easy questions after a hard one: hold on deep at step 1/2, then down to standard, opus/medium](docs/images/example-3-standard.png)
+![Easy questions after a hard one: hold on deep at step 1/2, then down to standard, opus/medium](https://raw.githubusercontent.com/jang2162/tiergear/main/docs/images/example-3-standard.png)
 
 ## Install
 
